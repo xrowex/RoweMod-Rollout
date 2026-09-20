@@ -1,0 +1,7 @@
+{
+  "table": "DT-hair",
+  "cloneRow": "hair-two-braids",
+  "row": "hair-rowe-mod",
+  "localizedName": "Rowe Braids (Mod)",
+  "bools": { "Visibility": true }
+}

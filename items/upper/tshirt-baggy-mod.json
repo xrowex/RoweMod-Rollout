@@ -1,0 +1,13 @@
+{
+  "table": "DT-upper",
+  "cloneRow": "tshirt-white",
+  "row": "tshirt-baggy-mod",
+  "localizedName": "Baggy T-Shirt (Mod)",
+  "price": 0,
+  "colour": [1.0, 1.0, 1.0, 1.0],
+  "upperMale": "/Game/MainFolder/Character/upper/tshirt-baggy/tshirt-baggy-male",
+  "albedo": "/Game/MainFolder/Character/upper/tshirt-baggy/T_tshirt-baggy-albedo",
+  "normal": "/Game/MainFolder/Character/upper/tshirt-baggy/T_tshirt-baggy-normal",
+  "roughness": "/Game/MainFolder/Character/upper/tshirt-baggy/T_tshirt-baggy-mask",
+  "previewImage": "/Game/MainFolder/UI/customization/mod-icons/T_tshirt-baggy-mod"
+}

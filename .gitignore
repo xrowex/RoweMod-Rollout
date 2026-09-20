@@ -1,0 +1,60 @@
+# Extracted game assets (do not commit ripped meshes)
+dumps/
+art/_ref/
+art/previews/_ref/
+
+# Downloaded third-party tools
+tools/_downloads/
+tools/FModel/
+tools/retoc/
+tools/CUE4Parse.CLI/
+tools/UAssetGUI.exe
+tools/*.zip
+tools/RolloutExtractor/bin/
+tools/RolloutExtractor/obj/
+tools/DtPatcher/bin/
+tools/DtPatcher/obj/
+tools/**/bin/
+tools/**/obj/
+tools/__pycache__/
+**/__pycache__/
+
+# Do not publish ripped game meshes or UE4SS binaries
+art/male-body-01.*
+art/hoodie-navy-male.*
+art/rig/main-rig.blend
+art/rig/main-rig_shirt_boot.blend
+tools/UE4SS/dwmapi.dll
+tools/UE4SS/ue4ss/*.dll
+ue/**/*.log
+ue/**/MI-Upper.uasset
+
+# Unreal generated
+ue/**/Intermediate/
+ue/**/Saved/
+ue/**/Binaries/
+ue/**/DerivedDataCache/
+ue/**/*.sln
+ue/**/*.vs/
+ue/RollerSkate/Content/Developers/
+ue/RollerSkate/Content/ModPreview/
+ue/RollerSkate/Content/MainFolder/Character/body/
+ue/RollerSkate/Content/MainFolder/Character/upper/hoodie/
+ue/**/__pycache__/
+
+# Packed game containers
+*.pak
+*.ucas
+*.utoc
+!docs/**
+
+# Art noise
+art/_preview/
+art/__pycache__/
+*.blend1
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.vs/
+*.user

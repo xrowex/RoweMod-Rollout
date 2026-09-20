@@ -1,0 +1,6 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.4",
+	"Category": "Mod",
+	"Description": "Rollout clothing preview and cook project. Keep /Game/MainFolder paths. Open /Game/ModPreview/Preview to inspect garments."
+}

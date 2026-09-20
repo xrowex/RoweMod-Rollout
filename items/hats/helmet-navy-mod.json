@@ -1,0 +1,8 @@
+{
+  "table": "DT-hats",
+  "cloneRow": "helmet-white",
+  "row": "helmet-navy-mod",
+  "localizedName": "Navy Helmet (Mod)",
+  "price": 0,
+  "colour": [0.035, 0.08, 0.2, 1.0]
+}

@@ -1,0 +1,7 @@
+{
+  "table": "DT-beard",
+  "cloneRow": "beard-01",
+  "row": "beard-rowe-mod",
+  "localizedName": "Rowe Beard (Mod)",
+  "bools": { "Visibility": true }
+}
