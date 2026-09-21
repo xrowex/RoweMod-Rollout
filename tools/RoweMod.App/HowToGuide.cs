@@ -6,19 +6,24 @@ sealed class HowToGuide : Panel
 {
     readonly Label _nextTitle = new();
     readonly Label _nextBody = new();
-    readonly LinkLabel _browse = new();
+    readonly Button _cta = new();
+    readonly LinkLabel _secondary = new();
     readonly FlowLayoutPanel _hoverCard;
     readonly Label _hoverTitle = new();
     readonly Label _hoverBody = new();
     readonly List<Label> _wrap = new();
     DetectedTools? _tools;
+    UiCopy.NextAction _action = UiCopy.NextAction.None;
 
     public string NextTitle => _nextTitle.Text;
     public bool HoverShown => _hoverOn;
     public string HoverTitle => _hoverTitle.Text;
+    public string CtaText => _cta.Text;
     bool _hoverOn;
 
+    public event EventHandler? NextActionRequested;
     public event EventHandler? BrowseGameRequested;
+    public event EventHandler? BrowseUnrealRequested;
 
     public HowToGuide()
     {
@@ -43,7 +48,8 @@ sealed class HowToGuide : Panel
             Eyebrow("NEXT", Color.FromArgb(120, 220, 170)),
             Title(_nextTitle),
             Body(_nextBody),
-            BrowseLink()));
+            CtaButton(),
+            SecondaryLink()));
         stack.Controls.Add(Space(8));
         _hoverCard = Card(
             Color.FromArgb(32, 36, 42),
@@ -63,9 +69,22 @@ sealed class HowToGuide : Panel
     {
         _tools = tools;
         var next = UiCopy.NextStep(tools);
+        _action = next.Action;
         _nextTitle.Text = next.Title;
         _nextBody.Text = next.Body;
-        _browse.Visible = next.Browse;
+
+        var hasCta = next.Action != UiCopy.NextAction.None && !string.IsNullOrWhiteSpace(next.Cta);
+        _cta.Visible = hasCta;
+        _cta.Text = next.Cta;
+        _cta.Enabled = true;
+
+        _secondary.Visible = next.Action is UiCopy.NextAction.FindGame or UiCopy.NextAction.BrowseUnreal;
+        _secondary.Text = next.Action switch
+        {
+            UiCopy.NextAction.BrowseUnreal => "Pick UnrealEditor.exe",
+            UiCopy.NextAction.FindGame => "Browse folder instead",
+            _ => "",
+        };
         WrapAll();
     }
 
@@ -106,24 +125,54 @@ sealed class HowToGuide : Panel
             foreach (Control child in stack.Controls)
             {
                 if (child is FlowLayoutPanel card)
+                {
                     card.Width = w;
+                    _cta.Width = Math.Max(160, w - 48);
+                }
             }
         }
         foreach (var lab in _wrap)
             lab.MaximumSize = new Size(Math.Max(180, w - 36), 0);
     }
 
-    LinkLabel BrowseLink()
+    Button CtaButton()
     {
-        _browse.Text = "Browse for the game folder";
-        _browse.AutoSize = true;
-        _browse.LinkColor = Color.FromArgb(120, 210, 255);
-        _browse.ActiveLinkColor = Color.White;
-        _browse.VisitedLinkColor = Color.FromArgb(120, 210, 255);
-        _browse.Margin = new Padding(0, 8, 0, 0);
-        _browse.LinkClicked += (_, _) => BrowseGameRequested?.Invoke(this, EventArgs.Empty);
-        _browse.Visible = false;
-        return _browse;
+        _cta.Text = "Continue";
+        _cta.AutoSize = false;
+        _cta.Height = 40;
+        _cta.Width = 200;
+        _cta.Margin = new Padding(0, 10, 0, 0);
+        _cta.FlatStyle = FlatStyle.Flat;
+        _cta.Font = new Font("Segoe UI Semibold", 11f);
+        _cta.BackColor = Color.FromArgb(56, 140, 96);
+        _cta.ForeColor = Color.White;
+        _cta.UseVisualStyleBackColor = false;
+        _cta.Cursor = Cursors.Hand;
+        _cta.FlatAppearance.BorderColor = Color.FromArgb(120, 210, 160);
+        _cta.FlatAppearance.MouseOverBackColor = Color.FromArgb(70, 165, 115);
+        _cta.FlatAppearance.MouseDownBackColor = Color.FromArgb(40, 110, 75);
+        _cta.Click += (_, _) => NextActionRequested?.Invoke(this, EventArgs.Empty);
+        _cta.Visible = false;
+        return _cta;
+    }
+
+    LinkLabel SecondaryLink()
+    {
+        _secondary.Text = "Browse folder instead";
+        _secondary.AutoSize = true;
+        _secondary.LinkColor = Color.FromArgb(120, 210, 255);
+        _secondary.ActiveLinkColor = Color.White;
+        _secondary.VisitedLinkColor = Color.FromArgb(120, 210, 255);
+        _secondary.Margin = new Padding(0, 8, 0, 0);
+        _secondary.LinkClicked += (_, _) =>
+        {
+            if (_action == UiCopy.NextAction.BrowseUnreal)
+                BrowseUnrealRequested?.Invoke(this, EventArgs.Empty);
+            else
+                BrowseGameRequested?.Invoke(this, EventArgs.Empty);
+        };
+        _secondary.Visible = false;
+        return _secondary;
     }
 
     static Control RepoLink()

@@ -13,7 +13,7 @@ sealed class MainForm : Form
     readonly Button _cook = MakeButton("Cook");
     readonly Button _pack = MakeButton("Play");
     ClothingPiece? _exportTarget;
-    readonly FlowLayoutPanel _chips = new();
+    readonly FlowLayoutPanel _steps = new();
     readonly TextBox _log = new();
     readonly HowToGuide _howTo = new();
     readonly SplitContainer _split = new();
@@ -23,11 +23,13 @@ sealed class MainForm : Form
     readonly ToolStripStatusLabel _overlayStatus = new() { Spring = true };
     DetectedTools _toolsState;
     bool _busy;
+    string _nextToolbarId = "";
 
     public HowToGuide HowTo => _howTo;
     public IReadOnlyList<string> Toolbar => new[]
     {
-        _setup.Text, _export.Text, _skates.Text, _gallery.Text, _cook.Text, _pack.Text,
+        _setup.Text.StartsWith("Setup", StringComparison.Ordinal) ? "Setup" : _setup.Text,
+        _export.Text, _skates.Text, _gallery.Text, _cook.Text, _pack.Text,
     };
 
     public MainForm()
@@ -60,11 +62,11 @@ sealed class MainForm : Form
         foreach (Control c in buttons.Controls)
             c.Dock = DockStyle.Fill;
 
-        _chips.Dock = DockStyle.Top;
-        _chips.Height = 40;
-        _chips.Padding = new Padding(12, 6, 12, 4);
-        _chips.WrapContents = false;
-        _chips.BackColor = Color.FromArgb(28, 28, 32);
+        _steps.Dock = DockStyle.Top;
+        _steps.Height = 48;
+        _steps.Padding = new Padding(12, 8, 12, 6);
+        _steps.WrapContents = false;
+        _steps.BackColor = Color.FromArgb(24, 26, 30);
 
         _log.Dock = DockStyle.Fill;
         _log.Multiline = true;
@@ -77,7 +79,9 @@ sealed class MainForm : Form
         _log.BorderStyle = BorderStyle.None;
 
         _howTo.Dock = DockStyle.Fill;
+        _howTo.NextActionRequested += async (_, _) => await RunNextActionAsync();
         _howTo.BrowseGameRequested += (_, _) => BrowseGame();
+        _howTo.BrowseUnrealRequested += (_, _) => BrowseUnreal();
 
         _split.Dock = DockStyle.Fill;
         _split.SplitterWidth = 6;
@@ -92,13 +96,14 @@ sealed class MainForm : Form
                 _split.SplitterDistance = Math.Max(220, _split.Width - 460);
             _split.Panel1MinSize = 220;
             _split.Panel2MinSize = 360;
+            TryAutoUpdate();
         };
 
         _status.SizingGrip = false;
         _status.Items.AddRange(new ToolStripItem[] { _exportStatus, _cookStatus, _overlayStatus });
 
         Controls.Add(_split);
-        Controls.Add(_chips);
+        Controls.Add(_steps);
         Controls.Add(buttons);
         Controls.Add(_status);
         _status.SendToBack();
@@ -139,6 +144,73 @@ sealed class MainForm : Form
         return b;
     }
 
+    async Task RunNextActionAsync()
+    {
+        if (_busy) return;
+        var action = UiCopy.NextStep(_toolsState).Action;
+        switch (action)
+        {
+            case UiCopy.NextAction.FindGame:
+                await FindGameSmartAsync();
+                break;
+            case UiCopy.NextAction.BrowseUnreal:
+                BrowseUnreal();
+                break;
+            case UiCopy.NextAction.OpenDotnet:
+                OpenDotnetDownload();
+                break;
+            case UiCopy.NextAction.Setup:
+                await RunJob("Setup", SetupAsync);
+                break;
+            case UiCopy.NextAction.Cook:
+                await RunJob("Cook", () => CookAsync());
+                break;
+            case UiCopy.NextAction.Play:
+                await RunJob("Play", PackAndPlayAsync);
+                break;
+        }
+    }
+
+    async Task FindGameSmartAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        RefreshChrome();
+        Log("---- Find game ----");
+        try
+        {
+            var found = await Task.Run(SteamLocate.FindRolloutPaks);
+            if (found != null)
+            {
+                ToolPaths.RememberGamePaks(found);
+                Log("Found  " + found);
+                Log("Find game ok");
+                return;
+            }
+
+            Log("Steam scan found nothing. Browse for the game folder.");
+            BrowseGame();
+        }
+        catch (Exception ex)
+        {
+            Log("ERROR " + ex.Message);
+        }
+        finally
+        {
+            _toolsState = ToolPaths.Detect();
+            _busy = false;
+            RefreshChrome();
+        }
+    }
+
+    static void OpenDotnetDownload()
+    {
+        Process.Start(new ProcessStartInfo("https://dotnet.microsoft.com/download/dotnet/8.0")
+        {
+            UseShellExecute = true,
+        });
+    }
+
     async Task RunJob(string name, Func<Task> work)
     {
         if (_busy) return;
@@ -168,11 +240,30 @@ sealed class MainForm : Form
         button.MouseLeave += (_, _) => _howTo.ShowButton(null);
     }
 
+    void TryAutoUpdate()
+    {
+        try
+        {
+            var msg = RepoUpdate.TryPull(_toolsState.Repo);
+            if (!string.IsNullOrWhiteSpace(msg))
+                Log("Repo  " + msg);
+            if (msg != null && msg.StartsWith("updated", StringComparison.OrdinalIgnoreCase))
+            {
+                _toolsState = ToolPaths.Detect();
+                RefreshChrome();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("Repo  update skipped: " + ex.Message);
+        }
+    }
+
     void BrowseGame()
     {
         using var dlg = new FolderBrowserDialog
         {
-            Description = "Pick RolloutInline, RollerSkate, Content, or the Paks folder.",
+            Description = "Pick Rollout Inline, RollerSkate, Content, or the Paks folder.",
             UseDescriptionForTitle = true,
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -181,7 +272,7 @@ sealed class MainForm : Form
         {
             MessageBox.Show(
                 this,
-                "That folder does not look like the game files.\n\nBrowse to:\n…\\RolloutInline\\RollerSkate\\Content\\Paks",
+                "That folder does not look like the game files.\n\nBrowse to Rollout Inline in Steam, or:\n…\\steamapps\\common\\…\\RollerSkate\\Content\\Paks",
                 "RoweMod",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -193,11 +284,60 @@ sealed class MainForm : Form
         RefreshChrome();
     }
 
+    void BrowseUnreal()
+    {
+        using var fileDlg = new OpenFileDialog
+        {
+            Title = "Pick UnrealEditor.exe (UE 5.4)",
+            Filter = "Unreal Editor|UnrealEditor.exe|All files|*.*",
+            FileName = "UnrealEditor.exe",
+            CheckFileExists = true,
+        };
+        if (fileDlg.ShowDialog(this) != DialogResult.OK) return;
+
+        var editor = ToolPaths.ResolveUnrealFromPath(fileDlg.FileName);
+        if (editor is null)
+        {
+            MessageBox.Show(
+                this,
+                "That is not Unreal Engine 5.4.\n\nBrowse to:\n…\\UE_5.4\\Engine\\Binaries\\Win64\\UnrealEditor.exe",
+                "RoweMod",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+        ToolPaths.RememberUnrealEditor(editor);
+        Log("Unreal  " + editor);
+        _toolsState = ToolPaths.Detect();
+        RefreshChrome();
+    }
+
     async Task SetupAsync()
     {
+        if (_toolsState.GamePaks is null)
+        {
+            var scanned = await Task.Run(SteamLocate.FindRolloutPaks);
+            if (scanned != null)
+            {
+                ToolPaths.RememberGamePaks(scanned);
+                _toolsState = ToolPaths.Detect();
+                Log("Found  " + scanned);
+            }
+        }
+
         var extra = _toolsState.GamePaks is null ? Array.Empty<string>() : new[] { "-GamePaks", "\"" + _toolsState.GamePaks + "\"" };
         var code = await RunPowerShell(_toolsState.BootstrapScript, extra);
         if (code != 0) throw new InvalidOperationException("Setup failed (" + code + ")");
+
+        if (_toolsState.GamePaks is null)
+        {
+            var after = await Task.Run(SteamLocate.FindRolloutPaks);
+            if (after != null)
+            {
+                ToolPaths.RememberGamePaks(after);
+                Log("Game folder " + after);
+            }
+        }
     }
 
     void OpenGallery()
@@ -298,7 +438,20 @@ sealed class MainForm : Form
         RunProcess(
             "powershell.exe",
             "-NoProfile -ExecutionPolicy Bypass -File \"" + script + "\" " + string.Join(" ", extra),
-            _toolsState.Repo);
+            _toolsState.Repo,
+            ToolEnv());
+
+    Dictionary<string, string> ToolEnv()
+    {
+        var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(_toolsState.GamePaks))
+            env["ROWE_GAME_PAKS"] = _toolsState.GamePaks;
+        if (!string.IsNullOrWhiteSpace(_toolsState.UnrealEditor))
+            env["ROWE_UE54"] = _toolsState.UnrealEditor;
+        if (!string.IsNullOrWhiteSpace(_toolsState.Blender))
+            env["ROWE_BLENDER"] = _toolsState.Blender;
+        return env;
+    }
 
     Task<int> RunProcess(string file, string args, string cwd, IReadOnlyDictionary<string, string>? env = null)
     {
@@ -312,6 +465,8 @@ sealed class MainForm : Form
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
+            foreach (var kv in ToolEnv())
+                psi.Environment[kv.Key] = kv.Value;
             if (env != null)
             {
                 foreach (var kv in env)
@@ -327,43 +482,44 @@ sealed class MainForm : Form
         });
     }
 
-    sealed class LogTextWriter : TextWriter
-    {
-        readonly Action<string> _write;
-        readonly StringBuilder _buf = new();
-        public LogTextWriter(Action<string> write) => _write = write;
-        public override Encoding Encoding => Encoding.UTF8;
-        public override void Write(char value)
-        {
-            if (value is '\n')
-            {
-                _write(_buf.ToString().TrimEnd('\r'));
-                _buf.Clear();
-                return;
-            }
-            _buf.Append(value);
-        }
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && _buf.Length > 0)
-                _write(_buf.ToString());
-            base.Dispose(disposing);
-        }
-    }
-
     void RefreshChrome()
     {
         var t = _toolsState;
         var setupDone = t.HasRetoc && t.GamePaks != null;
+        var next = UiCopy.NextStep(t);
+        _nextToolbarId = next.Action switch
+        {
+            UiCopy.NextAction.Setup => "setup",
+            UiCopy.NextAction.Cook or UiCopy.NextAction.BrowseUnreal => "cook",
+            UiCopy.NextAction.Play => "pack",
+            _ => "",
+        };
+
         _setup.Enabled = !_busy && !setupDone;
-        StyleSetupButton(setupDone);
+        StyleToolbarButton(_setup, setupDone ? "done" : (_nextToolbarId == "setup" ? "next" : "normal"), setupDone);
+        StyleToolbarButton(_export, "normal", false);
+        StyleToolbarButton(_skates, "normal", false);
+        StyleToolbarButton(_gallery, "normal", false);
         _export.Enabled = !_busy;
         _skates.Enabled = !_busy;
         _gallery.Enabled = !_busy;
         _cook.Enabled = !_busy && t.UnrealEditor != null;
+        StyleToolbarButton(_cook, _nextToolbarId == "cook" ? "next" : "normal", false);
         _pack.Enabled = !_busy && t.GamePaks != null && t.HasRetoc && t.HasDotnet;
+        StyleToolbarButton(_pack, _nextToolbarId == "pack" ? "next" : "normal", false);
 
-        RebuildChips(t, setupDone);
+        if (setupDone)
+        {
+            _setup.Text = "Setup done";
+            _setup.Cursor = Cursors.Default;
+        }
+        else
+        {
+            _setup.Text = "Setup";
+            _setup.Cursor = Cursors.Hand;
+        }
+
+        RebuildSteps(t);
         _howTo.Bind(t);
 
         _exportStatus.Text = t.LastExport is { } exp
@@ -375,56 +531,113 @@ sealed class MainForm : Form
         _overlayStatus.Text = t.OverlayUtoc != null ? "In the game" : "Not in the game yet";
     }
 
-    void StyleSetupButton(bool done)
+    void StyleToolbarButton(Button b, string mode, bool doneMuted)
     {
-        if (done)
+        switch (mode)
         {
-            _setup.Text = "Setup done";
-            _setup.BackColor = Color.FromArgb(38, 46, 40);
-            _setup.ForeColor = Color.FromArgb(130, 150, 135);
-            _setup.FlatAppearance.BorderColor = Color.FromArgb(70, 110, 75);
-            _setup.FlatAppearance.MouseOverBackColor = Color.FromArgb(38, 46, 40);
-            _setup.Cursor = Cursors.Default;
-            return;
+            case "next":
+                b.BackColor = Color.FromArgb(56, 140, 96);
+                b.ForeColor = Color.White;
+                b.FlatAppearance.BorderColor = Color.FromArgb(140, 220, 170);
+                b.FlatAppearance.MouseOverBackColor = Color.FromArgb(70, 165, 115);
+                break;
+            case "done":
+                b.BackColor = Color.FromArgb(38, 46, 40);
+                b.ForeColor = Color.FromArgb(130, 150, 135);
+                b.FlatAppearance.BorderColor = Color.FromArgb(70, 110, 75);
+                b.FlatAppearance.MouseOverBackColor = Color.FromArgb(38, 46, 40);
+                break;
+            default:
+                if (doneMuted) goto case "done";
+                b.BackColor = Color.FromArgb(45, 70, 90);
+                b.ForeColor = Color.White;
+                b.FlatAppearance.BorderColor = Color.FromArgb(90, 140, 160);
+                b.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 100, 125);
+                break;
         }
-        _setup.Text = "Setup";
-        _setup.BackColor = Color.FromArgb(45, 70, 90);
-        _setup.ForeColor = Color.White;
-        _setup.FlatAppearance.BorderColor = Color.FromArgb(90, 140, 160);
-        _setup.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 100, 125);
-        _setup.Cursor = Cursors.Hand;
     }
 
-    void RebuildChips(DetectedTools t, bool setupDone)
+    void RebuildSteps(DetectedTools t)
     {
-        _chips.SuspendLayout();
-        _chips.Controls.Clear();
-        _chips.Controls.Add(Chip(setupDone ? "Setup" : "Setup needed", setupDone, true));
-        _chips.Controls.Add(Chip(t.GamePaks != null ? "Game" : "No game", t.GamePaks != null, false));
-        _chips.Controls.Add(Chip(t.HasPulledClothing ? "Pulled" : "Not pulled", t.HasPulledClothing, false));
-        _chips.Controls.Add(Chip(t.Blender != null ? "Blender" : "No Blender", t.Blender != null, false));
-        _chips.Controls.Add(Chip(t.UnrealEditor != null ? "Unreal" : "No Unreal", t.UnrealEditor != null, false));
-        _chips.ResumeLayout();
-    }
-
-    static Label Chip(string text, bool ok, bool emphasize)
-    {
-        var green = emphasize && ok;
-        return new Label
+        _steps.SuspendLayout();
+        _steps.Controls.Clear();
+        var steps = UiCopy.FlowSteps(t);
+        var first = true;
+        foreach (var step in steps)
         {
-            Text = (ok ? "  ●  " : "  ○  ") + text,
-            AutoSize = true,
-            Padding = new Padding(8, 5, 10, 5),
-            Margin = new Padding(0, 0, 8, 0),
-            BackColor = green
-                ? Color.FromArgb(28, 72, 42)
-                : ok ? Color.FromArgb(36, 44, 40) : Color.FromArgb(48, 36, 34),
-            ForeColor = green
-                ? Color.FromArgb(150, 235, 170)
-                : ok ? Color.FromArgb(170, 200, 185) : Color.FromArgb(210, 170, 150),
-            Font = new Font("Segoe UI Semibold", 9f),
-        };
+            if (!step.Visible) continue;
+            if (!first)
+                _steps.Controls.Add(StepConnector(step.Done));
+            first = false;
+            _steps.Controls.Add(StepChip(step));
+        }
+        _steps.ResumeLayout();
     }
+
+    Control StepChip(UiCopy.FlowStep step)
+    {
+        Color back, fore, border;
+        if (step.Current)
+        {
+            back = Color.FromArgb(56, 140, 96);
+            fore = Color.White;
+            border = Color.FromArgb(140, 220, 170);
+        }
+        else if (step.Done)
+        {
+            back = Color.FromArgb(32, 52, 40);
+            fore = Color.FromArgb(150, 210, 170);
+            border = Color.FromArgb(70, 120, 90);
+        }
+        else
+        {
+            back = Color.FromArgb(40, 42, 48);
+            fore = Color.FromArgb(160, 165, 175);
+            border = Color.FromArgb(70, 74, 82);
+        }
+
+        var chip = new Label
+        {
+            Text = (step.Done && !step.Current ? "✓  " : step.Current ? "→  " : "○  ") + step.Label,
+            AutoSize = true,
+            Padding = new Padding(12, 7, 12, 7),
+            Margin = new Padding(0, 0, 0, 0),
+            BackColor = back,
+            ForeColor = fore,
+            Font = new Font("Segoe UI Semibold", 9.5f),
+            Cursor = step.Current && !_busy ? Cursors.Hand : Cursors.Default,
+        };
+        // WinForms Label has no Border; use a thin panel wrapper for the current step edge.
+        var wrap = new Panel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(1),
+            BackColor = border,
+            Margin = new Padding(0, 0, 0, 0),
+            Cursor = chip.Cursor,
+        };
+        wrap.Controls.Add(chip);
+        if (step.Current)
+        {
+            void Go(object? _, EventArgs __)
+            {
+                if (!_busy) _ = RunNextActionAsync();
+            }
+            chip.Click += Go;
+            wrap.Click += Go;
+        }
+        return wrap;
+    }
+
+    static Control StepConnector(bool lit) => new Label
+    {
+        Text = "——",
+        AutoSize = true,
+        Margin = new Padding(6, 8, 6, 0),
+        ForeColor = lit ? Color.FromArgb(90, 140, 110) : Color.FromArgb(70, 74, 82),
+        Font = new Font("Segoe UI", 9f),
+    };
 
     void Log(string line)
     {

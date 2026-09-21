@@ -1,5 +1,6 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
+using System.Text.Json;
+using RoweMod.Core;
 
 namespace RoweMod.App;
 
@@ -75,31 +76,17 @@ static class ToolPaths
     public static string? FindGamePaks()
     {
         var env = Environment.GetEnvironmentVariable("ROWE_GAME_PAKS");
-        if (!string.IsNullOrWhiteSpace(env) && LooksLikePaks(env))
-            return Path.GetFullPath(env);
+        if (LooksLikePaks(env))
+            return Path.GetFullPath(env!);
 
         var saved = LocalSettings.Load().GamePaks;
-        if (!string.IsNullOrWhiteSpace(saved) && LooksLikePaks(saved))
-            return Path.GetFullPath(saved);
+        if (LooksLikePaks(saved))
+            return Path.GetFullPath(saved!);
 
-        const string rel = @"steamapps\common\RolloutInline\RollerSkate\Content\Paks";
-        foreach (var lib in SteamLibraries())
-        {
-            var paks = Path.Combine(lib, rel);
-            if (LooksLikePaks(paks))
-                return Path.GetFullPath(paks);
-        }
-
-        var fallback = @"C:\Program Files (x86)\Steam\steamapps\common\RolloutInline\RollerSkate\Content\Paks";
-        return LooksLikePaks(fallback) ? Path.GetFullPath(fallback) : null;
+        return SteamLocate.FindRolloutPaks();
     }
 
-    public static bool LooksLikePaks(string? folder)
-    {
-        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return false;
-        return Directory.EnumerateFiles(folder, "*.utoc").Any()
-            || Directory.EnumerateFiles(folder, "*.pak").Any();
-    }
+    public static bool LooksLikePaks(string? folder) => SteamLocate.LooksLikePaks(folder);
 
     public static string? ResolveGamePaksFromFolder(string picked)
     {
@@ -112,7 +99,9 @@ static class ToolPaths
             Path.Combine(root, "Content", "Paks"),
             Path.Combine(root, "RollerSkate", "Content", "Paks"),
             Path.Combine(root, "RolloutInline", "RollerSkate", "Content", "Paks"),
+            Path.Combine(root, "Rollout Inline", "RollerSkate", "Content", "Paks"),
             Path.Combine(root, "steamapps", "common", "RolloutInline", "RollerSkate", "Content", "Paks"),
+            Path.Combine(root, "steamapps", "common", "Rollout Inline", "RollerSkate", "Content", "Paks"),
         })
         {
             if (LooksLikePaks(candidate)) return Path.GetFullPath(candidate);
@@ -122,11 +111,14 @@ static class ToolPaths
         {
             foreach (var dir in Directory.EnumerateDirectories(root, "Paks", SearchOption.AllDirectories))
             {
-                if (dir.Contains("RollerSkate", StringComparison.OrdinalIgnoreCase) && LooksLikePaks(dir))
-                    return Path.GetFullPath(dir);
+                if (LooksLikePaks(dir)) return Path.GetFullPath(dir);
             }
         }
         catch (UnauthorizedAccessException)
+        {
+            // stay with explicit candidates
+        }
+        catch (DirectoryNotFoundException)
         {
             // stay with explicit candidates
         }
@@ -139,6 +131,53 @@ static class ToolPaths
         var settings = LocalSettings.Load();
         settings.GamePaks = paks;
         settings.Save();
+    }
+
+    public static void RememberUnrealEditor(string editor)
+    {
+        Environment.SetEnvironmentVariable("ROWE_UE54", editor);
+        var settings = LocalSettings.Load();
+        settings.UnrealEditor = editor;
+        settings.Save();
+    }
+
+    public static string? ResolveUnrealFromPath(string picked)
+    {
+        if (string.IsNullOrWhiteSpace(picked)) return null;
+
+        if (File.Exists(picked))
+        {
+            if (picked.EndsWith("UnrealEditor.exe", StringComparison.OrdinalIgnoreCase) && LooksLikeUe54(picked))
+                return Path.GetFullPath(picked);
+            return null;
+        }
+
+        if (!Directory.Exists(picked)) return null;
+        var root = Path.GetFullPath(picked);
+        foreach (var candidate in new[]
+        {
+            Path.Combine(root, "Engine", "Binaries", "Win64", "UnrealEditor.exe"),
+            Path.Combine(root, "Binaries", "Win64", "UnrealEditor.exe"),
+            Path.Combine(root, "UnrealEditor.exe"),
+        })
+        {
+            if (File.Exists(candidate) && LooksLikeUe54(candidate))
+                return Path.GetFullPath(candidate);
+        }
+
+        try
+        {
+            foreach (var exe in Directory.EnumerateFiles(root, "UnrealEditor.exe", SearchOption.AllDirectories))
+            {
+                if (LooksLikeUe54(exe))
+                    return Path.GetFullPath(exe);
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // stay with explicit candidates
+        }
+        return null;
     }
 
     public static string? FindBlender51()
@@ -172,8 +211,24 @@ static class ToolPaths
     public static string? FindUnreal54()
     {
         var env = Environment.GetEnvironmentVariable("ROWE_UE54");
-        if (!string.IsNullOrWhiteSpace(env) && File.Exists(env))
+        if (!string.IsNullOrWhiteSpace(env) && File.Exists(env) && LooksLikeUe54(env))
             return Path.GetFullPath(env);
+
+        var saved = LocalSettings.Load().UnrealEditor;
+        if (!string.IsNullOrWhiteSpace(saved) && File.Exists(saved) && LooksLikeUe54(saved))
+            return Path.GetFullPath(saved);
+
+        foreach (var fromLauncher in EpicInstalledEngines())
+        {
+            if (File.Exists(fromLauncher) && LooksLikeUe54(fromLauncher))
+                return Path.GetFullPath(fromLauncher);
+        }
+
+        foreach (var fromRegistry in EpicRegisteredBuilds())
+        {
+            if (File.Exists(fromRegistry) && LooksLikeUe54(fromRegistry))
+                return Path.GetFullPath(fromRegistry);
+        }
 
         var guesses = new[]
         {
@@ -185,17 +240,25 @@ static class ToolPaths
         };
         foreach (var g in guesses)
         {
-            if (File.Exists(g)) return g;
+            if (File.Exists(g) && LooksLikeUe54(g)) return g;
         }
 
-        foreach (var root in new[] { @"E:\unreal", @"E:\EpicGames", @"C:\Program Files\Epic Games", @"D:\Epic Games" })
+        foreach (var root in new[]
+        {
+            @"E:\unreal",
+            @"E:\EpicGames",
+            @"C:\Program Files\Epic Games",
+            @"D:\Epic Games",
+            @"D:\Unreal",
+            @"C:\Unreal",
+        })
         {
             if (!Directory.Exists(root)) continue;
             try
             {
                 foreach (var exe in Directory.EnumerateFiles(root, "UnrealEditor.exe", SearchOption.AllDirectories))
                 {
-                    if (exe.Contains(@"UE_5.4\", StringComparison.OrdinalIgnoreCase))
+                    if (LooksLikeUe54(exe))
                         return exe;
                 }
             }
@@ -205,6 +268,116 @@ static class ToolPaths
             }
         }
         return null;
+    }
+
+    public static bool LooksLikeUe54(string editorExe)
+    {
+        if (string.IsNullOrWhiteSpace(editorExe) || !File.Exists(editorExe)) return false;
+        if (editorExe.Contains(@"UE_5.4\", StringComparison.OrdinalIgnoreCase)
+            || editorExe.Contains(@"UE_5.4/", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var version = FindBuildVersion(editorExe);
+        if (version == null) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(version));
+            var root = doc.RootElement;
+            var major = root.TryGetProperty("MajorVersion", out var maj) ? maj.GetInt32() : 0;
+            var minor = root.TryGetProperty("MinorVersion", out var min) ? min.GetInt32() : -1;
+            return major == 5 && minor == 4;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    static string? FindBuildVersion(string editorExe)
+    {
+        // ...\Engine\Binaries\Win64\UnrealEditor.exe → ...\Engine\Build\Build.version
+        var win64 = Path.GetDirectoryName(editorExe);
+        var binaries = win64 != null ? Path.GetDirectoryName(win64) : null;
+        var engine = binaries != null ? Path.GetDirectoryName(binaries) : null;
+        if (engine == null) return null;
+        var path = Path.Combine(engine, "Build", "Build.version");
+        return File.Exists(path) ? path : null;
+    }
+
+    static IEnumerable<string> EpicInstalledEngines()
+    {
+        var dat = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "Epic", "UnrealEngineLauncher", "LauncherInstalled.dat");
+        if (!File.Exists(dat)) yield break;
+
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(File.ReadAllText(dat));
+        }
+        catch
+        {
+            yield break;
+        }
+
+        using (doc)
+        {
+            if (!doc.RootElement.TryGetProperty("InstallationList", out var list)
+                || list.ValueKind != JsonValueKind.Array)
+                yield break;
+
+            foreach (var item in list.EnumerateArray())
+            {
+                var app = item.TryGetProperty("AppName", out var an) ? an.GetString() : null;
+                var artifact = item.TryGetProperty("ArtifactId", out var ar) ? ar.GetString() : null;
+                var loc = item.TryGetProperty("InstallLocation", out var il) ? il.GetString() : null;
+                if (string.IsNullOrWhiteSpace(loc)) continue;
+
+                var name = (app ?? "") + " " + (artifact ?? "");
+                var looks54 = name.Contains("UE_5.4", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("5.4", StringComparison.OrdinalIgnoreCase)
+                    || loc.Contains("UE_5.4", StringComparison.OrdinalIgnoreCase);
+                if (!looks54) continue;
+
+                var exe = Path.Combine(loc, "Engine", "Binaries", "Win64", "UnrealEditor.exe");
+                if (File.Exists(exe))
+                    yield return exe;
+            }
+        }
+    }
+
+    static IEnumerable<string> EpicRegisteredBuilds()
+    {
+        string?[] keys =
+        {
+            @"Software\Epic Games\Unreal Engine\Builds",
+            @"Software\EpicGames\Unreal Engine\Builds",
+        };
+        foreach (var keyPath in keys)
+        {
+            Microsoft.Win32.RegistryKey? key = null;
+            try
+            {
+                key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(keyPath);
+            }
+            catch
+            {
+                continue;
+            }
+            if (key == null) continue;
+            using (key)
+            {
+                foreach (var name in key.GetValueNames())
+                {
+                    if (key.GetValue(name) is not string path || string.IsNullOrWhiteSpace(path))
+                        continue;
+                    var exe = Path.Combine(path, "Engine", "Binaries", "Win64", "UnrealEditor.exe");
+                    if (File.Exists(exe))
+                        yield return exe;
+                }
+            }
+        }
     }
 
     public static bool HasDotnet8()
@@ -231,52 +404,4 @@ static class ToolPaths
         }
     }
 
-    static IEnumerable<string> SteamLibraries()
-    {
-        var steam = SteamInstall();
-        if (steam == null) yield break;
-        yield return steam;
-        var vdf = Path.Combine(steam, "steamapps", "libraryfolders.vdf");
-        if (!File.Exists(vdf)) yield break;
-        foreach (var line in File.ReadLines(vdf))
-        {
-            var m = Regex.Match(line, "\"path\"\\s+\"([^\"]+)\"");
-            if (!m.Success) continue;
-            var p = m.Groups[1].Value.Replace(@"\\", @"\");
-            if (Directory.Exists(p)) yield return p;
-        }
-    }
-
-    static string? SteamInstall()
-    {
-        try
-        {
-            using var cu = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
-            var path = cu?.GetValue("SteamPath") as string;
-            if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
-                return Path.GetFullPath(path);
-        }
-        catch { /* no steam user key */ }
-
-        try
-        {
-            using var lm = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Valve\Steam");
-            var path = lm?.GetValue("SteamPath") as string;
-            if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
-                return Path.GetFullPath(path);
-        }
-        catch { /* no steam machine key */ }
-
-        foreach (var guess in new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Steam"),
-            @"C:\Program Files (x86)\Steam",
-        })
-        {
-            if (File.Exists(Path.Combine(guess, "steam.exe")))
-                return Path.GetFullPath(guess);
-        }
-        return null;
-    }
 }

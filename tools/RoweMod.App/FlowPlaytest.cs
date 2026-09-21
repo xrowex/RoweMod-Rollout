@@ -60,6 +60,15 @@ static class FlowPlaytest
                     Fail("How-to next '" + main.HowTo.NextTitle + "' != '" + next.Title + "'");
                 else
                     Ok("How-to next is " + next.Title);
+                if (next.Action != UiCopy.NextAction.None)
+                {
+                    if (string.IsNullOrWhiteSpace(main.HowTo.CtaText) || main.HowTo.CtaText != next.Cta)
+                        Fail("CTA '" + main.HowTo.CtaText + "' != '" + next.Cta + "'");
+                    else
+                        Ok("CTA is " + next.Cta);
+                }
+                else
+                    Ok("no CTA when ready");
                 if (main.HowTo.HoverShown)
                     Fail("hover card visible at idle");
                 else

@@ -7,7 +7,7 @@ public static class GameLocate
     public static string? FindPaks()
     {
         var env = Environment.GetEnvironmentVariable("ROWE_GAME_PAKS");
-        if (LooksLike(env)) return Path.GetFullPath(env!);
+        if (SteamLocate.LooksLikePaks(env)) return Path.GetFullPath(env!);
 
         try
         {
@@ -19,18 +19,13 @@ public static class GameLocate
                     if (doc.RootElement.TryGetProperty(name, out var p))
                     {
                         var path = p.GetString();
-                        if (LooksLike(path)) return Path.GetFullPath(path!);
+                        if (SteamLocate.LooksLikePaks(path)) return Path.GetFullPath(path!);
                     }
                 }
             }
         }
         catch { /* ignore */ }
 
-        var fallback = @"C:\Program Files (x86)\Steam\steamapps\common\RolloutInline\RollerSkate\Content\Paks";
-        return LooksLike(fallback) ? fallback : null;
+        return SteamLocate.FindRolloutPaks();
     }
-
-    static bool LooksLike(string? folder) =>
-        !string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder)
-        && (Directory.EnumerateFiles(folder, "*.utoc").Any() || Directory.EnumerateFiles(folder, "*.pak").Any());
 }

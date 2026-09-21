@@ -2,36 +2,72 @@ namespace RoweMod.App;
 
 /// <summary>
 /// Where copy lives. One job per surface — never say the same thing twice.
-/// Next     — green card, always on. The one click to do.
+/// Next     — green card + CTA. Does the next step; does not point elsewhere.
+/// Steps    — Game → Setup → (Cook) → Play. Layout shows progress.
 /// Hover    — appears only while a toolbar button is hovered.
-/// Disabled — native tooltip on workshop actions that cannot run. Not used on the toolbar.
 /// Log      — job output and errors. Not instructions.
 /// Status   — timestamps. Not instructions.
-/// Chips    — binary state.
 /// Banner   — which workshop this is.
-/// Hint     — last action in a workshop. Hidden when idle.
-/// Empty    — list when there is nothing to show.
 /// </summary>
 static class UiCopy
 {
-    public readonly record struct Next(string Title, string Body, bool Browse);
+    public enum NextAction
+    {
+        None,
+        FindGame,
+        BrowseUnreal,
+        OpenDotnet,
+        Setup,
+        Cook,
+        Play,
+    }
+
+    public readonly record struct Next(string Title, string Body, NextAction Action, string Cta);
     public readonly record struct Hover(string Title, string Body);
+    public readonly record struct FlowStep(string Id, string Label, bool Done, bool Current, bool Visible);
 
     public static Next NextStep(DetectedTools t)
     {
         if (t.GamePaks is null)
-            return new("Find the game", "Install on Steam, or browse to Content\\Paks.", true);
+            return new("Find the game", "Scans Steam on every drive, or you pick the folder.", NextAction.FindGame, "Find game");
         if (!t.HasDotnet)
-            return new("Install .NET 8", "SDK from Microsoft, then reopen RoweMod.", false);
+            return new("Install .NET 8", "SDK from Microsoft, then reopen RoweMod.", NextAction.OpenDotnet, "Open download");
         if (!t.HasRetoc)
-            return new("Click Setup", "Finds the game and copies the menus.", false);
+            return new("Run Setup", "Copies the clothing menus once.", NextAction.Setup, "Run Setup");
         if (CookPending(t) && t.UnrealEditor is null)
-            return new("Install Unreal 5.4.4", "A PNG or mesh has to cook before Play.", false);
+            return new("Find Unreal 5.4", "Needed only to Cook a paint or mesh.", NextAction.BrowseUnreal, "Browse Unreal");
         if (CookPending(t))
-            return new("Click Cook", "Unreal has to cook before Play.", false);
+            return new("Cook", "Unreal prepares the paint or mesh.", NextAction.Cook, "Cook");
         if (t.OverlayUtoc is null)
-            return new("Click Play", "Puts the baggy tee and Rowe jeans in the game.", false);
-        return new("Make something", "Clothing, Skates, or Gallery — then Play.", false);
+            return new("Play", "Writes the examples into the game and launches.", NextAction.Play, "Play");
+        return new("Ready", "Clothing, Skates, or Gallery — then Play again.", NextAction.None, "");
+    }
+
+    public static IReadOnlyList<FlowStep> FlowSteps(DetectedTools t)
+    {
+        var game = t.GamePaks != null;
+        var setup = game && t.HasRetoc;
+        var cookNeeded = CookPending(t);
+        var cookDone = setup && !cookNeeded;
+        var playDone = t.OverlayUtoc != null;
+
+        var next = NextStep(t);
+        string current = next.Action switch
+        {
+            NextAction.FindGame => "game",
+            NextAction.Setup or NextAction.OpenDotnet => "setup",
+            NextAction.BrowseUnreal or NextAction.Cook => "cook",
+            NextAction.Play => "play",
+            _ => playDone ? "" : "play",
+        };
+
+        return new[]
+        {
+            new FlowStep("game", "Game", game, current == "game", true),
+            new FlowStep("setup", "Setup", setup, current == "setup", true),
+            new FlowStep("cook", "Cook", cookDone && setup, current == "cook", cookNeeded || current == "cook"),
+            new FlowStep("play", "Play", playDone, current == "play" || (next.Action == NextAction.None && !playDone), true),
+        };
     }
 
     public static Hover? ButtonHover(string? id, DetectedTools t)
@@ -41,14 +77,14 @@ static class UiCopy
         return id switch
         {
             "setup" when setupDone => new("Setup", "Already done."),
-            "setup" => new("Setup", "Finds the game. Once."),
+            "setup" => new("Setup", "Copies menus from the game. Once."),
             "clothing" => new("Clothing", "Paint a PNG or make a new mesh."),
             "skates" => new("Skates", "Boots, frames, wheels."),
             "gallery" => new("Gallery", "Subscribe, then Play. Submit is a PR."),
-            "cook" when t.UnrealEditor is null => new("Cook", "Needs Unreal 5.4.4."),
+            "cook" when t.UnrealEditor is null => new("Cook", "Needs Unreal 5.4."),
             "cook" => new("Cook", "Prepares PNG or mesh. Then Play."),
             "pack" when t.GamePaks is null => new("Play", "Needs the Steam game."),
-            "pack" when !t.HasRetoc => new("Play", "Click Setup first."),
+            "pack" when !t.HasRetoc => new("Play", "Run Setup first."),
             "pack" => new("Play", "Writes the overlay and launches."),
             _ => null,
         };
