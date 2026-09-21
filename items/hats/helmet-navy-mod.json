@@ -1,4 +1,5 @@
 {
+  "sample": true,
   "table": "DT-hats",
   "cloneRow": "helmet-white",
   "row": "helmet-navy-mod",

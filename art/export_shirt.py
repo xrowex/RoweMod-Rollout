@@ -10,16 +10,38 @@ the glTF via Interchange so units and inverse-binds stay game-correct.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import bpy
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
-BLEND = ROOT / "art" / "rig" / "main-rig_shirt.blend"
-GLB = ROOT / "art" / "_ref" / "cue-hoodie" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb"
-FBX = ROOT / "art" / "tshirt-baggy-male.fbx"
-OUT_GLB = ROOT / "art" / "tshirt-baggy-male.glb"
-MESH_NAME = "tshirt-baggy-male"
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _env_path(name: str) -> Path | None:
+    value = os.environ.get(name)
+    return Path(value) if value else None
+
+
+def _first_existing(*paths: Path | str | None) -> Path | None:
+    for path in paths:
+        if not path:
+            continue
+        candidate = Path(path)
+        if candidate.exists():
+            return candidate
+    return None
+
+
+MESH_NAME = os.environ.get("ROWE_MESH", "tshirt-baggy-male")
+BLEND = _env_path("ROWE_BLEND") or (ROOT / "art" / "rig" / "main-rig_shirt.blend")
+GLB = _first_existing(
+    _env_path("ROWE_BIND_GLB"),
+    ROOT / "art" / "_ref" / "cue-hoodie" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb",
+    ROOT / "dumps" / "game-clothing" / "meshes" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb",
+)
+FBX = _env_path("ROWE_OUT_FBX") or (ROOT / "art" / f"{MESH_NAME}.fbx")
+OUT_GLB = _env_path("ROWE_OUT_GLB") or (ROOT / "art" / f"{MESH_NAME}.glb")
 
 FOREARM_MAP = {
     "mixamorig:LeftForeArm": "lowerarm_l",
@@ -69,11 +91,15 @@ def import_game_armature() -> bpy.types.Object:
 
 
 def main() -> None:
-    if not GLB.exists():
-        raise FileNotFoundError(f"Missing {GLB}")
+    if GLB is None or not GLB.exists():
+        raise FileNotFoundError("Missing hoodie bind pose. Pull clothing first.")
+    if not Path(BLEND).exists():
+        raise FileNotFoundError(f"Missing {BLEND}")
     bpy.ops.wm.open_mainfile(filepath=str(BLEND))
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     print("BLEND_MESHES", [(o.name, len(o.data.vertices)) for o in meshes])
+    if not meshes:
+        raise RuntimeError("This Blender file has no clothing mesh yet. Model it, then Export this mesh.")
     mesh_obj = next(
         (
             o

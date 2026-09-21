@@ -1,7 +1,9 @@
 """Import the navy hoodie onto the game main-rig skeleton and MI-Upper slot."""
+from pathlib import Path
+
 import unreal
 
-FBX = r"C:\Users\xrowe\rolloutrowemod\art\hoodie-navy-male.fbx"
+FBX = str(Path(__file__).resolve().parents[4] / "art" / "hoodie-navy-male.fbx")
 MESH_DIR = "/Game/MainFolder/Character/upper/hoodie/mod"
 MESH_PATH = MESH_DIR + "/hoodie-navy-male"
 MESH_NAME = "hoodie-navy-male"

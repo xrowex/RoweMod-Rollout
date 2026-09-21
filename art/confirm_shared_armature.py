@@ -3,7 +3,7 @@ from pathlib import Path
 import bpy
 import json
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
+ROOT = Path(__file__).resolve().parents[1]
 REF = ROOT / "dumps" / "meshes" / "RollerSkate" / "Content" / "MainFolder" / "Character"
 OUT = ROOT / "dumps" / "json" / "armature-compare.json"
 BLEND = ROOT / "art" / "_ref" / "skater_armature.blend"

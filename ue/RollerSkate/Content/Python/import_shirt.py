@@ -4,14 +4,43 @@ CUE4Parse writes live IBMs into hoodie-male.glb. Blender export rewrites
 those matrices (82/87 bones drifted). Import the stitched gamebind glTF
 instead: shirt verts + hoodie nodes/IBMs. FBX import overwrites rest pose.
 """
+import json
+from pathlib import Path
+
 import unreal
 
-SHIRT_FBX = r"C:\Users\xrowe\rolloutrowemod\art\tshirt-baggy-male.fbx"
-SHIRT_GLB = r"C:\Users\xrowe\rolloutrowemod\art\tshirt-baggy-male.gamebind.glb"
-HOODIE_GLB = r"C:\Users\xrowe\rolloutrowemod\art\_ref\cue-hoodie\RollerSkate\Content\MainFolder\Character\upper\hoodie\hoodie-male.glb"
-MESH_DIR = "/Game/MainFolder/Character/upper/tshirt-baggy"
-MESH_PATH = MESH_DIR + "/tshirt-baggy-male"
-MESH_NAME = "tshirt-baggy-male"
+REPO = Path(__file__).resolve().parents[4]
+
+
+def _load_target():
+    path = REPO / "dumps" / "cook-target.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+_TARGET = _load_target()
+SHIRT_FBX = str(REPO / "art" / "tshirt-baggy-male.fbx")
+SHIRT_GLB = str(_TARGET.get("gamebind") or (REPO / "art" / "tshirt-baggy-male.gamebind.glb"))
+HOODIE_GLB = str(
+    REPO
+    / "art"
+    / "_ref"
+    / "cue-hoodie"
+    / "RollerSkate"
+    / "Content"
+    / "MainFolder"
+    / "Character"
+    / "upper"
+    / "hoodie"
+    / "hoodie-male.glb"
+)
+MESH_DIR = str(_TARGET.get("meshDir") or "/Game/MainFolder/Character/upper/tshirt-baggy")
+MESH_NAME = str(_TARGET.get("meshName") or "tshirt-baggy-male")
+MESH_PATH = MESH_DIR + "/" + MESH_NAME
 MAIN_RIG_DIR = "/Game/MainFolder/Character/body/main-rig"
 MAIN_RIG_PATH = MAIN_RIG_DIR + "/main-rig"
 MI_UPPER_PATH = "/Game/MainFolder/Character/upper/MI-Upper"
@@ -195,8 +224,9 @@ def install_skeleton(hoodie_skel):
 
 
 def main():
+    log("target mesh=" + MESH_NAME + " dir=" + MESH_DIR + " glb=" + SHIRT_GLB)
     delete_if_exists(MESH_PATH)
-    delete_if_exists(MESH_DIR + "/tshirt-baggy-male_Skeleton")
+    delete_if_exists(MESH_DIR + "/" + MESH_NAME + "_Skeleton")
     delete_if_exists("/Game/MainFolder/Character/upper/hoodie/mod/hoodie-navy-male")
     delete_if_exists("/Game/MainFolder/Character/upper/hoodie/mod/hoodie-navy-male_Skeleton")
     delete_if_exists(MAIN_RIG_PATH)

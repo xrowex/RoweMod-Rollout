@@ -7,7 +7,7 @@ import bpy
 from mathutils import Vector, Euler
 from math import radians
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
+ROOT = Path(__file__).resolve().parents[1]
 ART = ROOT / "art"
 BLEND = ART / "hoodie-navy-male.blend"
 FBX = ART / "hoodie-navy-male.fbx"

@@ -1,6 +1,7 @@
 param(
     [string]$Project = (Join-Path $PSScriptRoot "RollerSkate\RollerSkate.uproject"),
-    [string]$ImportScript = (Join-Path $PSScriptRoot "RollerSkate\Content\Python\import_shirt.py")
+    [string]$ImportScript = (Join-Path $PSScriptRoot "RollerSkate\Content\Python\import_shirt.py"),
+    [switch]$SkipPack
 )
 $ErrorActionPreference = "Stop"
 $tools = Join-Path (Split-Path $PSScriptRoot -Parent) "tools"
@@ -12,6 +13,7 @@ $project = (Resolve-Path $Project).Path
 $py = (Resolve-Path $ImportScript).Path
 
 $previewPy = Join-Path $PSScriptRoot "RollerSkate\Content\Python\import_previews.py"
+$itemTexPy = Join-Path $PSScriptRoot "RollerSkate\Content\Python\import_item_textures.py"
 
 Write-Host "Editor: $cmd"
 Write-Host "Importing shirt via $py..."
@@ -24,11 +26,20 @@ if (Test-Path $previewPy) {
     if ($LASTEXITCODE -ne 0) { Write-Warning "Preview import exit $LASTEXITCODE" }
 }
 
+if (Test-Path $itemTexPy) {
+    Write-Host "Importing item textures via $itemTexPy..."
+    & $cmd $project -unattended -nopause -nosplash -NullRHI -log -ExecutePythonScript="$itemTexPy"
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Item texture import exit $LASTEXITCODE" }
+}
+
 Write-Host "Cooking Windows..."
 & $cmd $project -run=Cook -TargetPlatform=Windows -Unversioned -unattended -nopause -nosplash -NullRHI -log
 if ($LASTEXITCODE -ne 0) { throw "Cook failed ($LASTEXITCODE)" }
 
-dotnet run --project (Join-Path $tools "DtPatcher\DtPatcher.csproj") -c Release -- --all-items
-if ($LASTEXITCODE -ne 0) { throw "DtPatcher failed ($LASTEXITCODE)" }
-
-& (Join-Path $tools "pack_mod.ps1")
+if (-not $SkipPack) {
+    dotnet run --project (Join-Path $tools "DtPatcher\DtPatcher.csproj") -c Release -- --all-items
+    if ($LASTEXITCODE -ne 0) { throw "DtPatcher failed ($LASTEXITCODE)" }
+    & (Join-Path $tools "pack_mod.ps1")
+} else {
+    Write-Host "SkipPack: cook only. Use Pack and Play to write the overlay."
+}

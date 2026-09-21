@@ -1,0 +1,9 @@
+{
+  "table": "DT-lower",
+  "cloneRow": "oversized-jeans-dark",
+  "row": "oversized-jeans-mod",
+  "localizedName": "Rowe Jeans (Mod)",
+  "price": 0,
+  "colour": [1.0, 1.0, 1.0, 1.0],
+  "albedo": "/Game/MainFolder/Character/lower/oversized-jeans-mod/T_jeans-rowe-albedo"
+}

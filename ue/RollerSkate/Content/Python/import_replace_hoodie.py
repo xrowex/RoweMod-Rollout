@@ -1,7 +1,9 @@
 """Import the navy hoodie over the game hoodie-male path so an IoStore patch can replace it."""
+from pathlib import Path
+
 import unreal
 
-FBX = r"C:\Users\xrowe\rolloutrowemod\art\hoodie-navy-male.fbx"
+FBX = str(Path(__file__).resolve().parents[4] / "art" / "hoodie-navy-male.fbx")
 MESH_DIR = "/Game/MainFolder/Character/upper/hoodie"
 MESH_PATH = MESH_DIR + "/hoodie-male"
 MESH_NAME = "hoodie-male"

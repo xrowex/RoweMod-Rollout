@@ -5,7 +5,7 @@ from pathlib import Path
 
 import bpy
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
+ROOT = Path(__file__).resolve().parents[1]
 HOODIE = ROOT / "art" / "_ref" / "cue-hoodie" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb"
 SHIRT = ROOT / "art" / "tshirt-baggy-male.gamebind.glb"
 OUT = ROOT / "art" / "_preview" / "shirt_skinned.png"

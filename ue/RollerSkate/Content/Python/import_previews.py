@@ -1,8 +1,10 @@
 """Import framed catalog icons for mod rows."""
 import os
+from pathlib import Path
+
 import unreal
 
-ROOT = r"C:\Users\xrowe\rolloutrowemod\art\previews"
+ROOT = str(Path(__file__).resolve().parents[4] / "art" / "previews")
 DEST = "/Game/MainFolder/UI/customization/mod-icons"
 ICONS = ("T_hoodie-navy-mod", "T_tshirt-baggy-mod")
 

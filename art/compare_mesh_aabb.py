@@ -6,7 +6,7 @@ from pathlib import Path
 
 from stitch_shirt_glb import accessor_bytes, read_glb
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
+ROOT = Path(__file__).resolve().parents[1]
 FILES = {
     "hoodie": ROOT / "art" / "_ref" / "cue-hoodie" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb",
     "shirt": ROOT / "art" / "tshirt-baggy-male.glb",

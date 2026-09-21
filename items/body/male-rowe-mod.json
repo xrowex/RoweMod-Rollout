@@ -1,4 +1,5 @@
 {
+  "sample": true,
   "table": "DT-bodytypes",
   "cloneRow": "male-01",
   "row": "male-rowe-mod",

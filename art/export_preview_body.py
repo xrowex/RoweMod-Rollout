@@ -3,7 +3,7 @@ from pathlib import Path
 
 import bpy
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
+ROOT = Path(__file__).resolve().parents[1]
 GLB = ROOT / "art" / "_ref" / "male-body-01.glb"
 FBX = ROOT / "art" / "male-body-01.fbx"
 

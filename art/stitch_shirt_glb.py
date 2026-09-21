@@ -7,13 +7,36 @@ hoodie-male.glb and remaps joint indices to the hoodie skin order.
 from __future__ import annotations
 
 import json
+import os
 import struct
 from pathlib import Path
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
-HOODIE = ROOT / "art" / "_ref" / "cue-hoodie" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb"
-SHIRT = ROOT / "art" / "tshirt-baggy-male.glb"
-OUT = ROOT / "art" / "tshirt-baggy-male.gamebind.glb"
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _env_path(name: str) -> Path | None:
+    value = os.environ.get(name)
+    return Path(value) if value else None
+
+
+def _first_existing(*paths: Path | str | None) -> Path | None:
+    for path in paths:
+        if not path:
+            continue
+        candidate = Path(path)
+        if candidate.exists():
+            return candidate
+    return None
+
+
+MESH_NAME = os.environ.get("ROWE_MESH", "tshirt-baggy-male")
+HOODIE = _first_existing(
+    _env_path("ROWE_BIND_GLB"),
+    ROOT / "art" / "_ref" / "cue-hoodie" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb",
+    ROOT / "dumps" / "game-clothing" / "meshes" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb",
+)
+SHIRT = _env_path("ROWE_OUT_GLB") or (ROOT / "art" / f"{MESH_NAME}.glb")
+OUT = _env_path("ROWE_GAMEBIND") or (ROOT / "art" / f"{MESH_NAME}.gamebind.glb")
 
 COMPONENT = {
     5120: ("b", 1),
@@ -178,25 +201,29 @@ def stitch(hoodie: dict, hoodie_bin: bytes, shirt: dict, shirt_bin: bytes) -> tu
     mesh_index = 0
     if hoodie.get("meshes"):
         out["meshes"][0]["primitives"] = new_prims
-        out["meshes"][0]["name"] = "tshirt-baggy-male"
+        out["meshes"][0]["name"] = MESH_NAME
     else:
-        out["meshes"] = [{"name": "tshirt-baggy-male", "primitives": new_prims}]
+        out["meshes"] = [{"name": MESH_NAME, "primitives": new_prims}]
         mesh_index = 0
     # Keep hoodie nodes/skins. Point the first mesh-bearing node at mesh 0.
     for node in out["nodes"]:
         if "mesh" in node:
             node["mesh"] = mesh_index
             node["skin"] = 0
-            node["name"] = "tshirt-baggy-male"
+            node["name"] = MESH_NAME
             break
     else:
-        out["nodes"].append({"name": "tshirt-baggy-male", "mesh": mesh_index, "skin": 0})
+        out["nodes"].append({"name": MESH_NAME, "mesh": mesh_index, "skin": 0})
         out.setdefault("scenes", [{"nodes": []}])
         out["scenes"][0].setdefault("nodes", []).append(len(out["nodes"]) - 1)
     return out, bytes(new_blob)
 
 
 def main() -> None:
+    if HOODIE is None or not HOODIE.exists():
+        raise FileNotFoundError("Missing hoodie bind pose. Pull clothing first.")
+    if not SHIRT.exists():
+        raise FileNotFoundError(f"Missing {SHIRT}")
     hoodie, hoodie_bin = read_glb(HOODIE)
     shirt, shirt_bin = read_glb(SHIRT)
     compare_ibms(hoodie, hoodie_bin, shirt, shirt_bin)

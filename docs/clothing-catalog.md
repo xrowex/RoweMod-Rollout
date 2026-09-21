@@ -129,5 +129,5 @@ New-mesh and recolor workflows: [modding.md](modding.md).
 - FModel: `tools/FModel/FModel.exe`, UE version **GAME_UE5_4**. Point at `...\RolloutInline\RollerSkate`. Mesh export = UEFormat. Needs a `.usmap` for this build.
 - retoc: `tools/retoc/retoc.exe`. `to-legacy --filter <name> --version UE5_4` and `to-zen --version UE5_4`.
 - CUE4Parse.CLI: `tools/CUE4Parse.CLI/cue4parse.exe` (same usmap requirement).
-- Blender: 4.4 at `C:\Program Files\Blender Foundation\Blender 4.4\blender.exe`.
+- Blender: **5.1** at `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
 - Dummy cook project: `ue/RollerSkate/RollerSkate.uproject` (paths must stay `/Game/MainFolder/...` so the overlay resolves the live `main-rig` skeleton).

@@ -1,4 +1,5 @@
 {
+  "sample": true,
   "table": "DT-frames",
   "cloneRow": "standard-flat-frame",
   "row": "frames-navy-mod",

@@ -5,11 +5,39 @@ using UAssetAPI.PropertyTypes.Structs;
 using UAssetAPI.UnrealTypes;
 using UAssetAPI.Unversioned;
 
-internal static class Program
+namespace DtPatcher;
+
+public static class Program
 {
-    private static int Main(string[] args)
+    public static int Main(string[] args) => Run(args);
+
+    public static string DiscoverRepo(string? start = null)
     {
-        var repo = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var seeds = new List<string>();
+        if (!string.IsNullOrWhiteSpace(start)) seeds.Add(start);
+        seeds.Add(AppContext.BaseDirectory);
+        seeds.Add(Environment.CurrentDirectory);
+        foreach (var seed in seeds.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            DirectoryInfo? dir = new(Path.GetFullPath(seed));
+            for (var i = 0; i < 12 && dir != null; i++)
+            {
+                if (Directory.Exists(Path.Combine(dir.FullName, "items")) &&
+                    Directory.Exists(Path.Combine(dir.FullName, "tools")))
+                    return dir.FullName;
+                dir = dir.Parent;
+            }
+        }
+        throw new DirectoryNotFoundException("RoweMod repo root not found from " + (start ?? AppContext.BaseDirectory));
+    }
+
+    public static int PatchAllItems(string? repo = null) => Run(new[] { "--all-items" }, repo);
+
+    public static int Run(string[] args, string? repoOverride = null)
+    {
+        var repo = string.IsNullOrWhiteSpace(repoOverride)
+            ? DiscoverRepo()
+            : Path.GetFullPath(repoOverride);
         var itemPaths = new List<string>();
         var positional = new List<string>();
         for (var i = 0; i < args.Length; i++)
@@ -33,6 +61,9 @@ internal static class Program
 
         if (itemPaths.Count == 0 && positional.Count == 0)
             itemPaths.AddRange(Directory.GetFiles(Path.Combine(repo, "items"), "*.json", SearchOption.AllDirectories));
+
+        var includeSamples = args.Any(a => a == "--include-samples")
+            || string.Equals(Environment.GetEnvironmentVariable("ROWE_PACK_SAMPLES"), "1", StringComparison.OrdinalIgnoreCase);
 
         Usmap? mappings = null;
         var usmap = Path.Combine(repo, "dumps", "mappings.usmap");
@@ -69,17 +100,27 @@ internal static class Program
                 Console.Error.WriteLine("item needs row + cloneRow: " + full);
                 return 1;
             }
+            if (spec.Sample && !includeSamples)
+            {
+                Console.WriteLine("SKIP sample " + spec.Row);
+                continue;
+            }
             specs.Add((full, spec));
-        }
-
-        if (specs.Count == 0)
-        {
-            Console.Error.WriteLine("no item json files");
-            return 1;
         }
 
         var patchedDir = Path.Combine(repo, "dumps", "patched");
         Directory.CreateDirectory(patchedDir);
+        foreach (var leftover in Directory.GetFiles(patchedDir, "*.*"))
+        {
+            File.Delete(leftover);
+            Console.WriteLine("CLEARED " + leftover);
+        }
+
+        if (specs.Count == 0)
+        {
+            Console.WriteLine("no live items (kit samples are templates and are not packed)");
+            return 0;
+        }
 
         foreach (var group in specs.GroupBy(s => s.Spec.Table, StringComparer.OrdinalIgnoreCase))
         {
@@ -309,6 +350,7 @@ internal static class Program
 
 internal sealed class ItemSpec
 {
+    public bool Sample { get; set; }
     public string Table { get; set; } = "DT-upper";
     public string CloneRow { get; set; } = "";
     public string Row { get; set; } = "";

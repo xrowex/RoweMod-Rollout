@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AssemblyName>RoweMod</AssemblyName>
+    <RootNamespace>RoweMod.App</RootNamespace>
+    <Product>RoweMod</Product>
+    <Description>Few-click setup and ship for RoweMod × Rollout clothing overlays.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DtPatcher\DtPatcher.csproj" />
+  </ItemGroup>
+</Project>

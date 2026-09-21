@@ -1,4 +1,5 @@
 {
+  "sample": true,
   "table": "DT-glasses",
   "cloneRow": "panto-sunglasses-black",
   "row": "sunglasses-rowe-mod",

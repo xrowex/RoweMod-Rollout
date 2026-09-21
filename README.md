@@ -2,77 +2,75 @@
 
 Open clothing-modding kit for **[Rollout Inline](https://store.steampowered.com/app/4464990/)** (UE 5.4.4). Add items to the live customization menus instead of replacing meshes.
 
-This repository does **not** ship ripped game assets. You need the Steam game, Unreal 5.4.4 (for new meshes), and the tools listed below.
+This repository does **not** ship ripped game assets, Unreal, Blender, or retoc binaries. You need the Steam game; Track B also needs Blender and Unreal.
+
+## First run
+
+The app is a real **Windows exe** (`dist\RoweMod.exe`, .NET 8 WinForms). `RoweMod.cmd` only starts that exe (or `dotnet run` if you have not published yet). The `.ps1` files are internals the exe calls. You do not run those by hand.
+
+1. Install the [.NET 8 SDK](https://dotnet.microsoft.com/download).
+2. Clone [xrowex/RoweMod-Rollout](https://github.com/xrowex/RoweMod-Rollout).
+3. Double-click `RoweMod.cmd`, or publish once:
+
+   ```powershell
+   .\tools\publish_rowemod.ps1
+   ```
+
+   Then double-click `dist\RoweMod.exe`.
+4. Click **Setup** once. It finds the Steam game, downloads retoc, and extracts DataTables. After that the button greys out and a green **Setup complete** chip stays on.
+5. **Pack and Play** once to write only live items (painted jeans + baggy tee). Dummy navy/rowe slot clones stay on disk as templates.
+6. **Clothing** → pull from your Steam copy to paint, add one template tint, or start a new mesh.
+
+| Button | What it does | Needs |
+|---|---|---|
+| **Setup** | retoc + extract tables | .NET 8 + Steam game |
+| **Clothing** | Workshop: paint, new mesh, or kit templates | Steam game; Blender 5.1 to open/export |
+| **Cook** | Unreal import + Windows cook (no overlay write) | UE **5.4.4** |
+| **Pack and Play** | patch live items, write IoStore overlay, launch `steam://run/4464990` | Setup already run |
+| **Mesh to game** | Export last garment → Cook → Pack and Play | all of the above |
+
+Missing tools disable the related button and the status strip says what to install.
 
 ## Two tracks
 
-| Track | When | What you author |
-|---|---|---|
-| **A — recolor / new row** | The silhouette already exists | A JSON spec that clones a stock row and changes name, tint, price, or textures |
-| **B — new mesh** | You need a new shape | A garment on `main-rig` + JSON that points `UpperMale` / `LowerMale` at your cooked mesh |
+| Track | When | What you author | Tools |
+|---|---|---|---|
+| **A — tint** | Same shape, new color | Edit `items/*.json`, Pack and Play | Game + .NET 8 |
+| **A+ — paint** | Same shape, new texture | Pull a map, Make a paint mod, edit the PNG, Pack and Play | Track A + **UE 5.4.4** |
+| **B — new mesh** | New silhouette | Garment on `main-rig`, Export, Cook, Pack and Play | Track A + **Blender 5.1** + **UE 5.4.4** |
 
-Every customization slot has a Track A example under `items/`. Tops also has a Track B shirt (`tshirt-baggy-mod`).
-
-## Quick start (Track A)
-
-Requires .NET 8 and the game installed.
-
-```powershell
-# 1. Extract live DataTables (once)
-.\tools\extract_tables.ps1
-
-# 2. Copy an example, change row / localizedName / colour
-copy items\lower\cargos-navy-mod.json items\lower\my-pants.json
-
-# 3. Patch tables + pack an IoStore overlay into the game
-.\tools\pack_mod.ps1
-```
-
-Launch Rollout Inline. Mod rows are listed **first** in each menu.
+Live packed items are the baggy tee (new mesh) and Rowe jeans (painted albedo). Every other slot JSON is a **template** (`"sample": true`) and is not written into the catalog unless you click **Add this tint to the game**.
 
 ## Examples
 
-| Slot | Table | Example | Kind |
+| Slot | Table | File | Kind |
 |---|---|---|---|
-| Tops | `DT-upper` | `items/upper/hoodie-navy-mod.json` | Track A tint |
-| Tops | `DT-upper` | `items/upper/tshirt-baggy-mod.json` | Track B new mesh |
-| Bottoms | `DT-lower` | `items/lower/cargos-navy-mod.json` | Track A tint |
-| Hats | `DT-hats` | `items/hats/helmet-navy-mod.json` | Track A tint |
-| Glasses | `DT-glasses` | `items/glasses/sunglasses-rowe-mod.json` | Track A row |
-| Hair | `DT-hair` | `items/hair/hair-rowe-mod.json` | Track A row |
-| Beard | `DT-beard` | `items/beard/beard-rowe-mod.json` | Track A row |
-| Body | `DT-bodytypes` | `items/body/male-rowe-mod.json` | Track A row |
-| Skin | `DT-skin` | `items/skin/skin-rowe-mod.json` | Track A contrast |
-| Eyes | `DT-eyes` | `items/eyes/eyes-rowe-mod.json` | Track A row |
-| Boots | `DT-boot` | `items/boots/boot-navy-mod.json` | Track A part tints |
-| Frames | `DT-frames` | `items/frames/frames-navy-mod.json` | Track A tint |
-| Wheels | `DT-wheels` | `items/wheels/wheels-rowe-mod.json` | Track A row |
+| Tops | `DT-upper` | `items/upper/tshirt-baggy-mod.json` | Live new mesh |
+| Bottoms | `DT-lower` | `items/lower/oversized-jeans-mod.json` | Live paint |
+| Other slots | `DT-*` | `items/<slot>/*-mod.json` with `"sample": true` | Templates only |
 
 JSON fields: `table`, `cloneRow`, `row` (must end in `-mod` to sort first), `localizedName`, `price`, `colour`, `colours` (boot Shell/Sole/Laces/…), `refs` / `upperMale` / `albedo` / `previewImage`.
 
 ## Track B — new mesh
 
-Shared skeleton: `/Game/MainFolder/Character/body/main-rig/main-rig` (87 UE5-mannequin bones). Rig kit: `art/rig/main-rig.blend`.
+Shared skeleton: `/Game/MainFolder/Character/body/main-rig/main-rig` (87 UE5-mannequin bones). Rig kit: `art/rig/main-rig.blend` (armature only; rebuilt from `art/rig/main-rig.fbx`).
 
-1. Model on `main-rig`. Save a copy so the kit stays armature-only.
-2. Export with `art/export_shirt.py` (stitches weights onto live hoodie inverse-binds).
-3. Import in `ue/RollerSkate/RollerSkate.uproject` at a **new** `/Game/MainFolder/...` path. Do not pack `main-rig` or `MI-Upper`.
-4. Point the item JSON mesh field at that path. Cook: `ue/cook_mod.ps1`. Then `tools/pack_mod.ps1`.
+1. **Clothing → New mesh** copies `art/rig/main-rig.blend` and writes the item JSON.
+2. Model on deform bones only (not `ik_*`). Pull clothing first so Export can use the hoodie bind pose.
+3. **Export this mesh**, then **Cook**, then **Pack and Play**. Do not pack `main-rig` or `MI-Upper`.
 
 Details: [docs/modding.md](docs/modding.md). Catalog: [docs/clothing-catalog.md](docs/clothing-catalog.md).
 
 ## What gets packed
 
-`RollerSkate-Windows_P.utoc/.ucas` plus `ClothingMod_P.pak` in `RollerSkate/Content/Paks` and `Paks/~mods`. Overlay packages only load if a patched DataTable already loaded by the game hard-references them.
+`RollerSkate-Windows_P.utoc/.ucas` in `RollerSkate/Content/Paks` and `Paks/~mods`. `ClothingMod_P.pak` is written only if UnrealPak is installed. Overlay packages only load if the game already hard-references them from a patched DataTable.
 
 ## Legal
 
-MIT for the tools and original RoweMod art. **Rollout Inline** content belongs to its owners. Do not commit extracted meshes, textures, or `.uasset` dumps. This is an unofficial fan project.
+MIT for the tools and original RoweMod art. **Rollout Inline** content belongs to its owners. Pull clothing only from a Steam copy you own. Do not commit, upload, or redistribute extracted meshes, textures, or `.uasset` dumps. This is an unofficial fan project.
 
 ## Requirements
 
 - Windows, Steam copy of Rollout Inline
-- .NET 8 SDK (DtPatcher)
-- [retoc](https://github.com/trumank/retoc) in `tools/retoc/`
-- Unreal Engine **5.4.4** only if you cook a new mesh
-- Blender 5.1 for the shirt/rig examples
+- .NET 8 SDK (launcher + DtPatcher)
+- Track B: Blender **5.1** and Unreal Engine **5.4.4**

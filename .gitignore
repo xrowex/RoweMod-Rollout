@@ -22,7 +22,7 @@ tools/__pycache__/
 # Do not publish ripped game meshes or UE4SS binaries
 art/male-body-01.*
 art/hoodie-navy-male.*
-art/rig/main-rig.blend
+art/rig/main-rig_shirt.blend
 art/rig/main-rig_shirt_boot.blend
 tools/UE4SS/dwmapi.dll
 tools/UE4SS/ue4ss/*.dll
@@ -58,3 +58,6 @@ Thumbs.db
 Desktop.ini
 .vs/
 *.user
+
+# Published launcher
+dist/

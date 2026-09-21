@@ -8,6 +8,7 @@
 | UAssetGUI | `UAssetGUI.exe` | Inspect/edit legacy `.uasset` |
 | dump_namemap.py | this folder | Dump FName tables from legacy packages |
 | pack_mod.ps1 | this folder | Pack patched `DT-upper` (and optional cooked meshes) into `~mods` |
+| pull_clothing.ps1 | this folder | Extract clothing meshes/textures from your Steam copy into `dumps/game-clothing` |
 | DtPatcher | `DtPatcher/` | Clone a DataTable row from `items/*.json` |
 | find_ue54.ps1 | this folder | Locate UnrealEditor 5.4 |
 

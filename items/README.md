@@ -1,6 +1,8 @@
 # Item specs
 
-One JSON file per customization row. `tools/pack_mod.ps1` patches every file under this folder.
+One JSON file per customization row. `tools/pack_mod.ps1` patches live files under this folder.
+
+`"sample": true` means the file is a template. DtPatcher skips it, so it does not appear in the game. Clothing → Kit templates → **Add this tint to the game** removes that flag.
 
 `row` should end with `-mod` so DtPatcher inserts it at the front of the DataTable (the menus iterate `GetDataTableRowNames` in table order).
 

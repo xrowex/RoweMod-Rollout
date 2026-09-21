@@ -1,13 +1,15 @@
 """Build a lit preview map with the male body and baggy shirt on main-rig."""
 import os
+from pathlib import Path
 
 import unreal
 
 import import_shirt
 
-BODY_FBX = r"C:\Users\xrowe\rolloutrowemod\art\male-body-01.fbx"
-BODY_GLB = r"C:\Users\xrowe\rolloutrowemod\art\male-body-01.glb"
-TEX_DIR = r"C:\Users\xrowe\rolloutrowemod\art\textures\tshirt-baggy"
+REPO = Path(__file__).resolve().parents[4]
+BODY_FBX = str(REPO / "art" / "male-body-01.fbx")
+BODY_GLB = str(REPO / "art" / "male-body-01.glb")
+TEX_DIR = str(REPO / "art" / "textures" / "tshirt-baggy")
 BODY_DIR = "/Game/ModPreview"
 BODY_PATH = BODY_DIR + "/male-body-01"
 SHIRT_DIR = "/Game/MainFolder/Character/upper/tshirt-baggy"

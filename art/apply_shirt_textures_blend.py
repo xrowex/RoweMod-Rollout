@@ -5,7 +5,7 @@ from pathlib import Path
 
 import bpy
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
+ROOT = Path(__file__).resolve().parents[1]
 TEX = ROOT / "art" / "textures" / "tshirt-baggy"
 BLENDS = [
     ROOT / "art" / "rig" / "main-rig_shirt.blend",

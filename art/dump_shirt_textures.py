@@ -5,8 +5,9 @@ from pathlib import Path
 
 import bpy
 
-BLEND = Path(r"C:\Users\xrowe\rolloutrowemod\art\rig\main-rig_shirt.blend")
-OUT = Path(r"C:\Users\xrowe\rolloutrowemod\art\textures\tshirt-baggy")
+ROOT = Path(__file__).resolve().parents[1]
+BLEND = ROOT / "art" / "rig" / "main-rig_shirt.blend"
+OUT = ROOT / "art" / "textures" / "tshirt-baggy"
 
 
 def main() -> None:

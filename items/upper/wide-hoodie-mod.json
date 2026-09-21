@@ -1,0 +1,14 @@
+{
+  "table": "DT-upper",
+  "cloneRow": "tshirt-white",
+  "row": "wide-hoodie-mod",
+  "localizedName": "wide hoodie (Mod)",
+  "price": 0,
+  "colour": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "upperMale": "/Game/MainFolder/Character/upper/wide-hoodie-mod/wide-hoodie-mod-male"
+}

@@ -11,7 +11,7 @@ from pathlib import Path
 import bpy
 from mathutils import Vector
 
-ROOT = Path(r"C:\Users\xrowe\rolloutrowemod")
+ROOT = Path(__file__).resolve().parents[1]
 SOURCES = [
     ROOT / "art" / "_ref" / "hoodie-male.glb",
     ROOT / "dumps" / "meshes" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb",
@@ -161,7 +161,7 @@ def main():
         apply_unit_scale=True,
         apply_scale_options="FBX_SCALE_ALL",
         object_types={"ARMATURE"},
-        use_armature_deform_only=True,
+        use_armature_deform_only=False,
     )
     print("WROTE", BLEND)
     print("WROTE", FBX)
