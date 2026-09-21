@@ -7,6 +7,7 @@ sealed class GalleryForm : Form
     readonly DetectedTools _tools;
     readonly FlowLayoutPanel _list = new();
     readonly Label _hint = new();
+    readonly Panel _sharePanel = new();
     readonly ComboBox _submitPick = new();
     readonly TextBox _author = new();
     List<CatalogEntry> _catalog = new();
@@ -31,26 +32,36 @@ sealed class GalleryForm : Form
             Text = UiCopy.GalleryBanner,
         };
 
-        var submitBar = new Panel { Dock = DockStyle.Top, Height = 52, Padding = new Padding(12, 8, 12, 8) };
+        var topBar = new Panel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(12, 6, 12, 6) };
+        var refresh = SmallButton("Refresh", () => _ = LoadCatalogAsync());
+        refresh.Left = 0;
+        refresh.Top = 2;
+        var share = SmallButton("Share…", ToggleShare);
+        share.Left = 110;
+        share.Top = 2;
+        topBar.Controls.Add(refresh);
+        topBar.Controls.Add(share);
+
+        _sharePanel.Dock = DockStyle.Top;
+        _sharePanel.Height = 0;
+        _sharePanel.Visible = false;
+        _sharePanel.Padding = new Padding(12, 4, 12, 8);
+        _sharePanel.BackColor = Color.FromArgb(24, 28, 32);
         _submitPick.Left = 0;
-        _submitPick.Top = 4;
+        _submitPick.Top = 6;
         _submitPick.Width = 280;
         _submitPick.DropDownStyle = ComboBoxStyle.DropDownList;
         _author.Left = 290;
-        _author.Top = 6;
+        _author.Top = 8;
         _author.Width = 160;
-        _author.PlaceholderText = "Your name on the card";
-        var submit = SmallButton("Submit this item", () => _ = SubmitAsync());
+        _author.PlaceholderText = "Your name";
+        var submit = SmallButton("Submit", () => _ = SubmitAsync());
         submit.Left = 460;
-        submit.Top = 4;
+        submit.Top = 6;
         submit.AutoSize = true;
-        var refresh = SmallButton("Refresh catalog", () => _ = LoadCatalogAsync());
-        refresh.Left = 640;
-        refresh.Top = 4;
-        submitBar.Controls.Add(_submitPick);
-        submitBar.Controls.Add(_author);
-        submitBar.Controls.Add(submit);
-        submitBar.Controls.Add(refresh);
+        _sharePanel.Controls.Add(_submitPick);
+        _sharePanel.Controls.Add(_author);
+        _sharePanel.Controls.Add(submit);
 
         _hint.Dock = DockStyle.Top;
         _hint.Height = 0;
@@ -68,11 +79,20 @@ sealed class GalleryForm : Form
 
         Controls.Add(_list);
         Controls.Add(_hint);
-        Controls.Add(submitBar);
+        Controls.Add(_sharePanel);
+        Controls.Add(topBar);
         Controls.Add(banner);
 
         FillSubmitPick();
         Shown += async (_, _) => await LoadCatalogAsync();
+    }
+
+    void ToggleShare()
+    {
+        var on = !_sharePanel.Visible;
+        _sharePanel.Visible = on;
+        _sharePanel.Height = on ? 48 : 0;
+        if (on) FillSubmitPick();
     }
 
     void FillSubmitPick()

@@ -35,12 +35,10 @@ static class UiCopy
         if (!t.HasRetoc)
             return new("Run Setup", "Copies the clothing menus once.", NextAction.Setup, "Run Setup");
         if (CookPending(t) && t.UnrealEditor is null)
-            return new("Find Unreal 5.4", "Needed only to Cook a paint or mesh.", NextAction.BrowseUnreal, "Browse Unreal");
-        if (CookPending(t))
-            return new("Cook", "Unreal prepares the paint or mesh.", NextAction.Cook, "Cook");
-        if (t.OverlayUtoc is null)
-            return new("Play", "Writes the examples into the game and launches.", NextAction.Play, "Play");
-        return new("Ready", "Clothing, Skates, or Gallery — then Play again.", NextAction.None, "");
+            return new("Find Unreal 5.4", "Needed only when a paint or shape is waiting.", NextAction.BrowseUnreal, "Browse Unreal");
+        if (CookPending(t) || t.OverlayUtoc is null)
+            return new("Play", "Cooks if needed, writes the overlay, and launches.", NextAction.Play, "Play");
+        return new("Ready", "Create or Gallery, then Play.", NextAction.None, "");
     }
 
     public static IReadOnlyList<FlowStep> FlowSteps(DetectedTools t)
@@ -49,16 +47,17 @@ static class UiCopy
         var setup = game && t.HasRetoc;
         var cookNeeded = CookPending(t);
         var cookDone = setup && !cookNeeded;
-        var playDone = t.OverlayUtoc != null;
+        var playDone = t.OverlayUtoc != null && !cookNeeded;
 
         var next = NextStep(t);
         string current = next.Action switch
         {
             NextAction.FindGame => "game",
             NextAction.Setup or NextAction.OpenDotnet => "setup",
-            NextAction.BrowseUnreal or NextAction.Cook => "cook",
-            NextAction.Play => "play",
-            _ => playDone ? "" : "play",
+            NextAction.BrowseUnreal => "cook",
+            NextAction.Cook => "cook",
+            NextAction.Play => cookNeeded ? "cook" : "play",
+            _ => "",
         };
 
         return new[]
@@ -66,7 +65,7 @@ static class UiCopy
             new FlowStep("game", "Game", game, current == "game", true),
             new FlowStep("setup", "Setup", setup, current == "setup", true),
             new FlowStep("cook", "Cook", cookDone && setup, current == "cook", cookNeeded || current == "cook"),
-            new FlowStep("play", "Play", playDone, current == "play" || (next.Action == NextAction.None && !playDone), true),
+            new FlowStep("play", "Play", playDone, current == "play", true),
         };
     }
 
@@ -78,14 +77,11 @@ static class UiCopy
         {
             "setup" when setupDone => new("Setup", "Already done."),
             "setup" => new("Setup", "Copies menus from the game. Once."),
-            "clothing" => new("Clothing", "Paint a PNG or make a new mesh."),
-            "skates" => new("Skates", "Boots, frames, wheels."),
-            "gallery" => new("Gallery", "Subscribe, then Play. Submit is a PR."),
-            "cook" when t.UnrealEditor is null => new("Cook", "Needs Unreal 5.4."),
-            "cook" => new("Cook", "Prepares PNG or mesh. Then Play."),
+            "create" => new("Create", "Paint or shape clothes and skates."),
+            "gallery" => new("Gallery", "Subscribe, then Play."),
             "pack" when t.GamePaks is null => new("Play", "Needs the Steam game."),
             "pack" when !t.HasRetoc => new("Play", "Run Setup first."),
-            "pack" => new("Play", "Writes the overlay and launches."),
+            "pack" => new("Play", "Cooks if needed, writes the overlay, launches."),
             _ => null,
         };
     }
@@ -93,10 +89,10 @@ static class UiCopy
     public static string WorkshopBanner(WorkshopDomain domain, WorkshopTab tab) =>
         (domain, tab) switch
         {
-            (WorkshopDomain.Skates, WorkshopTab.Paint) => "Paint. Wheels are texture-only.",
+            (WorkshopDomain.Skates, WorkshopTab.Paint) => "Paint wheels or a skate texture.",
             (WorkshopDomain.Skates, _) => "New frame or boot.",
-            (_, WorkshopTab.Paint) => "Paint a PNG, then Play.",
-            _ => "New mesh on the skeleton.",
+            (_, WorkshopTab.Paint) => "Paint a texture.",
+            _ => "New shape on the skeleton.",
         };
 
     public static string WorkshopEmpty(WorkshopDomain domain, WorkshopTab tab, bool pulled)
@@ -106,7 +102,7 @@ static class UiCopy
         return pulled ? "" : "Get from game first.";
     }
 
-    public static string GalleryBanner => "Subscribe, then Play. Submit is a GitHub PR.";
+    public static string GalleryBanner => "Subscribe, then Play.";
     public static string GalleryEmpty => "No mods in the catalog yet.";
 
     public static bool CookPending(DetectedTools t)
