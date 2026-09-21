@@ -14,24 +14,25 @@ namespace RoweMod.App;
 /// </summary>
 static class UiCopy
 {
-    public readonly record struct Next(string Title, string Body, bool Browse);
+    public enum BrowseTarget { None, Game, Unreal }
+    public readonly record struct Next(string Title, string Body, BrowseTarget Browse);
     public readonly record struct Hover(string Title, string Body);
 
     public static Next NextStep(DetectedTools t)
     {
         if (t.GamePaks is null)
-            return new("Find the game", "Install on Steam, or browse to Content\\Paks.", true);
+            return new("Find the game", "Install on Steam, or browse to Content\\Paks.", BrowseTarget.Game);
         if (!t.HasDotnet)
-            return new("Install .NET 8", "SDK from Microsoft, then reopen RoweMod.", false);
+            return new("Install .NET 8", "SDK from Microsoft, then reopen RoweMod.", BrowseTarget.None);
         if (!t.HasRetoc)
-            return new("Click Setup", "Finds the game and copies the menus.", false);
+            return new("Click Setup", "Finds the game and copies the menus.", BrowseTarget.None);
         if (CookPending(t) && t.UnrealEditor is null)
-            return new("Install Unreal 5.4.4", "A PNG or mesh has to cook before Play.", false);
+            return new("Find Unreal 5.4.4", "Finish install, or browse to UnrealEditor.exe.", BrowseTarget.Unreal);
         if (CookPending(t))
-            return new("Click Cook", "Unreal has to cook before Play.", false);
+            return new("Click Cook", "Unreal has to cook before Play.", BrowseTarget.None);
         if (t.OverlayUtoc is null)
-            return new("Click Play", "Puts the baggy tee and Rowe jeans in the game.", false);
-        return new("Make something", "Clothing, Skates, or Gallery — then Play.", false);
+            return new("Click Play", "Puts the baggy tee and Rowe jeans in the game.", BrowseTarget.None);
+        return new("Make something", "Clothing, Skates, or Gallery — then Play.", BrowseTarget.None);
     }
 
     public static Hover? ButtonHover(string? id, DetectedTools t)

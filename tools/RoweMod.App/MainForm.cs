@@ -78,6 +78,7 @@ sealed class MainForm : Form
 
         _howTo.Dock = DockStyle.Fill;
         _howTo.BrowseGameRequested += (_, _) => BrowseGame();
+        _howTo.BrowseUnrealRequested += (_, _) => BrowseUnreal();
 
         _split.Dock = DockStyle.Fill;
         _split.SplitterWidth = 6;
@@ -92,6 +93,7 @@ sealed class MainForm : Form
                 _split.SplitterDistance = Math.Max(220, _split.Width - 460);
             _split.Panel1MinSize = 220;
             _split.Panel2MinSize = 360;
+            TryAutoUpdate();
         };
 
         _status.SizingGrip = false;
@@ -168,6 +170,25 @@ sealed class MainForm : Form
         button.MouseLeave += (_, _) => _howTo.ShowButton(null);
     }
 
+    void TryAutoUpdate()
+    {
+        try
+        {
+            var msg = RepoUpdate.TryPull(_toolsState.Repo);
+            if (!string.IsNullOrWhiteSpace(msg))
+                Log("Repo  " + msg);
+            if (msg != null && msg.StartsWith("updated", StringComparison.OrdinalIgnoreCase))
+            {
+                _toolsState = ToolPaths.Detect();
+                RefreshChrome();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("Repo  update skipped: " + ex.Message);
+        }
+    }
+
     void BrowseGame()
     {
         using var dlg = new FolderBrowserDialog
@@ -189,6 +210,34 @@ sealed class MainForm : Form
         }
         ToolPaths.RememberGamePaks(paks);
         Log("Game folder " + paks);
+        _toolsState = ToolPaths.Detect();
+        RefreshChrome();
+    }
+
+    void BrowseUnreal()
+    {
+        using var fileDlg = new OpenFileDialog
+        {
+            Title = "Pick UnrealEditor.exe (UE 5.4)",
+            Filter = "Unreal Editor|UnrealEditor.exe|All files|*.*",
+            FileName = "UnrealEditor.exe",
+            CheckFileExists = true,
+        };
+        if (fileDlg.ShowDialog(this) != DialogResult.OK) return;
+
+        var editor = ToolPaths.ResolveUnrealFromPath(fileDlg.FileName);
+        if (editor is null)
+        {
+            MessageBox.Show(
+                this,
+                "That is not Unreal Engine 5.4.\n\nBrowse to:\n…\\UE_5.4\\Engine\\Binaries\\Win64\\UnrealEditor.exe",
+                "RoweMod",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+        ToolPaths.RememberUnrealEditor(editor);
+        Log("Unreal  " + editor);
         _toolsState = ToolPaths.Detect();
         RefreshChrome();
     }
@@ -298,7 +347,20 @@ sealed class MainForm : Form
         RunProcess(
             "powershell.exe",
             "-NoProfile -ExecutionPolicy Bypass -File \"" + script + "\" " + string.Join(" ", extra),
-            _toolsState.Repo);
+            _toolsState.Repo,
+            ToolEnv());
+
+    Dictionary<string, string> ToolEnv()
+    {
+        var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(_toolsState.GamePaks))
+            env["ROWE_GAME_PAKS"] = _toolsState.GamePaks;
+        if (!string.IsNullOrWhiteSpace(_toolsState.UnrealEditor))
+            env["ROWE_UE54"] = _toolsState.UnrealEditor;
+        if (!string.IsNullOrWhiteSpace(_toolsState.Blender))
+            env["ROWE_BLENDER"] = _toolsState.Blender;
+        return env;
+    }
 
     Task<int> RunProcess(string file, string args, string cwd, IReadOnlyDictionary<string, string>? env = null)
     {
@@ -312,6 +374,8 @@ sealed class MainForm : Form
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
+            foreach (var kv in ToolEnv())
+                psi.Environment[kv.Key] = kv.Value;
             if (env != null)
             {
                 foreach (var kv in env)
@@ -400,17 +464,25 @@ sealed class MainForm : Form
         _chips.SuspendLayout();
         _chips.Controls.Clear();
         _chips.Controls.Add(Chip(setupDone ? "Setup" : "Setup needed", setupDone, true));
-        _chips.Controls.Add(Chip(t.GamePaks != null ? "Game" : "No game", t.GamePaks != null, false));
+        _chips.Controls.Add(Chip(
+            t.GamePaks != null ? "Game" : "No game",
+            t.GamePaks != null,
+            false,
+            t.GamePaks is null ? BrowseGame : null));
         _chips.Controls.Add(Chip(t.HasPulledClothing ? "Pulled" : "Not pulled", t.HasPulledClothing, false));
         _chips.Controls.Add(Chip(t.Blender != null ? "Blender" : "No Blender", t.Blender != null, false));
-        _chips.Controls.Add(Chip(t.UnrealEditor != null ? "Unreal" : "No Unreal", t.UnrealEditor != null, false));
+        _chips.Controls.Add(Chip(
+            t.UnrealEditor != null ? "Unreal" : "No Unreal",
+            t.UnrealEditor != null,
+            false,
+            t.UnrealEditor is null ? BrowseUnreal : null));
         _chips.ResumeLayout();
     }
 
-    static Label Chip(string text, bool ok, bool emphasize)
+    static Label Chip(string text, bool ok, bool emphasize, Action? onClick = null)
     {
         var green = emphasize && ok;
-        return new Label
+        var chip = new Label
         {
             Text = (ok ? "  ●  " : "  ○  ") + text,
             AutoSize = true,
@@ -423,7 +495,11 @@ sealed class MainForm : Form
                 ? Color.FromArgb(150, 235, 170)
                 : ok ? Color.FromArgb(170, 200, 185) : Color.FromArgb(210, 170, 150),
             Font = new Font("Segoe UI Semibold", 9f),
+            Cursor = onClick != null ? Cursors.Hand : Cursors.Default,
         };
+        if (onClick != null)
+            chip.Click += (_, _) => onClick();
+        return chip;
     }
 
     void Log(string line)

@@ -19,6 +19,8 @@ sealed class HowToGuide : Panel
     bool _hoverOn;
 
     public event EventHandler? BrowseGameRequested;
+    public event EventHandler? BrowseUnrealRequested;
+    UiCopy.BrowseTarget _browseTarget = UiCopy.BrowseTarget.None;
 
     public HowToGuide()
     {
@@ -65,7 +67,13 @@ sealed class HowToGuide : Panel
         var next = UiCopy.NextStep(tools);
         _nextTitle.Text = next.Title;
         _nextBody.Text = next.Body;
-        _browse.Visible = next.Browse;
+        _browseTarget = next.Browse;
+        _browse.Visible = next.Browse != UiCopy.BrowseTarget.None;
+        _browse.Text = next.Browse switch
+        {
+            UiCopy.BrowseTarget.Unreal => "Browse for Unreal Editor 5.4",
+            _ => "Browse for the game folder",
+        };
         WrapAll();
     }
 
@@ -121,7 +129,13 @@ sealed class HowToGuide : Panel
         _browse.ActiveLinkColor = Color.White;
         _browse.VisitedLinkColor = Color.FromArgb(120, 210, 255);
         _browse.Margin = new Padding(0, 8, 0, 0);
-        _browse.LinkClicked += (_, _) => BrowseGameRequested?.Invoke(this, EventArgs.Empty);
+        _browse.LinkClicked += (_, _) =>
+        {
+            if (_browseTarget == UiCopy.BrowseTarget.Unreal)
+                BrowseUnrealRequested?.Invoke(this, EventArgs.Empty);
+            else
+                BrowseGameRequested?.Invoke(this, EventArgs.Empty);
+        };
         _browse.Visible = false;
         return _browse;
     }
