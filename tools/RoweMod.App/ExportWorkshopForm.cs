@@ -1,15 +1,21 @@
 namespace RoweMod.App;
 
+enum WorkshopDomain
+{
+    Clothing,
+    Skates,
+}
+
 enum WorkshopTab
 {
     Paint,
     Mesh,
-    Templates,
 }
 
 sealed class ExportWorkshopForm : Form
 {
     readonly DetectedTools _tools;
+    readonly WorkshopDomain _domain;
     List<ClothingPiece> _pieces;
     readonly Label _banner = new();
     readonly Label _hint = new();
@@ -19,13 +25,28 @@ sealed class ExportWorkshopForm : Form
 
     public bool ExportMesh { get; private set; }
     public ClothingPiece? ExportTarget { get; private set; }
+    public bool SavedCookTarget { get; private set; }
+    public string BannerText => _banner.Text;
 
-    public ExportWorkshopForm(DetectedTools tools)
+    public void ShowTab(WorkshopTab tab) => SetTab(tab);
+
+    IEnumerable<ClothingPiece> VisiblePieces => _pieces.Where(Matches);
+
+    bool Matches(ClothingPiece p)
+    {
+        if (p.Kind == ClothingKind.Kit || p.Sample) return false;
+        if (_domain == WorkshopDomain.Skates) return ClothingLibrary.IsSkate(p);
+        return ClothingLibrary.IsClothingSlot(p.Slot);
+    }
+
+    public ExportWorkshopForm(DetectedTools tools, WorkshopDomain domain = WorkshopDomain.Clothing)
     {
         _tools = tools;
+        _domain = domain;
         _pieces = ClothingLibrary.Scan(tools.Repo).ToList();
+        var skate = domain == WorkshopDomain.Skates;
 
-        Text = "Clothing";
+        Text = skate ? "Skates" : "Clothing";
         Width = 920;
         Height = 740;
         MinimumSize = new Size(760, 560);
@@ -35,38 +56,32 @@ sealed class ExportWorkshopForm : Form
         Font = new Font("Segoe UI", 10f);
 
         _banner.Dock = DockStyle.Top;
-        _banner.Height = 64;
-        _banner.Padding = new Padding(16, 10, 16, 6);
-        _banner.Text = "Pick what you are making. The gray bones in Blender are the real game skeleton — there is no hoodie yet until you model one.";
+        _banner.Height = 36;
+        _banner.Padding = new Padding(16, 10, 16, 4);
+        _banner.Text = UiCopy.WorkshopBanner(domain, WorkshopTab.Paint);
 
         var pick = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 92,
-            ColumnCount = 3,
+            Height = 72,
+            ColumnCount = 2,
             Padding = new Padding(12, 0, 12, 8),
         };
-        pick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
-        pick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
-        pick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
-        var paint = ModeCard("Paint", "Keep the stock shape. Recolor or paint a texture.");
-        var mesh = ModeCard("New mesh", "New shape. Model on the gray skeleton, then export.");
-        var templates = ModeCard("Color tints", "Optional extras. Not in the game until you add one.");
+        pick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        pick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        var paint = ModeCard("Paint", "Edit a texture.");
+        var mesh = ModeCard("New mesh", skate ? "Copy a game frame or boot." : "Model on the skeleton.");
         WireClicks(paint, () => SetTab(WorkshopTab.Paint));
         WireClicks(mesh, () => SetTab(WorkshopTab.Mesh));
-        WireClicks(templates, () => SetTab(WorkshopTab.Templates));
-        _modeCards.AddRange(new[] { paint, mesh, templates });
+        _modeCards.AddRange(new[] { paint, mesh });
         pick.Controls.Add(paint, 0, 0);
         pick.Controls.Add(mesh, 1, 0);
-        pick.Controls.Add(templates, 2, 0);
         foreach (Control c in pick.Controls) c.Dock = DockStyle.Fill;
 
         var pullBar = new Panel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(12, 0, 12, 8) };
         var pull = new Button
         {
-            Text = _tools.HasPulledClothing
-                ? "Refresh clothes from my game"
-                : "Get clothes from my game (for paint + export)",
+            Text = _tools.HasPulledClothing ? "Refresh from game" : "Get from game",
             Dock = DockStyle.Fill,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(70, 90, 50),
@@ -79,16 +94,17 @@ sealed class ExportWorkshopForm : Form
         pullBar.Controls.Add(pull);
 
         _hint.Dock = DockStyle.Top;
-        _hint.Height = 48;
-        _hint.Padding = new Padding(16, 4, 16, 4);
-        _hint.ForeColor = Color.FromArgb(255, 220, 120);
-        _hint.Text = "Start with New mesh if you are making a silhouette. Use Paint to change a texture.";
+        _hint.Height = 0;
+        _hint.Padding = new Padding(16, 2, 16, 2);
+        _hint.ForeColor = Color.FromArgb(180, 210, 200);
+        _hint.Text = "";
+        _hint.Visible = false;
 
         _list.Dock = DockStyle.Fill;
         _list.AutoScroll = true;
         _list.WrapContents = false;
         _list.FlowDirection = FlowDirection.TopDown;
-        _list.Padding = new Padding(12, 4, 8, 12);
+        _list.Padding = new Padding(12, 8, 8, 16);
         _list.BackColor = Color.FromArgb(18, 18, 20);
 
         Controls.Add(_list);
@@ -97,8 +113,7 @@ sealed class ExportWorkshopForm : Form
         Controls.Add(pick);
         Controls.Add(_banner);
 
-        var wip = _pieces.FirstOrDefault(p => p.IsEmptyRig);
-        SetTab(wip != null ? WorkshopTab.Mesh : WorkshopTab.Paint);
+        SetTab(WorkshopTab.Paint);
     }
 
     static void WireClicks(Control root, Action click)
@@ -157,7 +172,7 @@ sealed class ExportWorkshopForm : Form
             return;
         }
         pull.Enabled = false;
-        SetHint("Copying clothes from your Steam folder. They stay on this PC.", ok: true);
+        SetHint("Pulling…", ok: true);
         try
         {
             var extra = new[] { "-GamePaks", "\"" + _tools.GamePaks + "\"" };
@@ -179,15 +194,15 @@ sealed class ExportWorkshopForm : Form
             try { File.WriteAllText(logPath, output + Environment.NewLine + err); } catch { /* ignore */ }
             _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
             RebuildList();
-            var n = _pieces.Count(x => x.FromGame);
+            var n = VisiblePieces.Count(x => x.FromGame);
             if (p.ExitCode == 0 && n > 0)
             {
-                pull.Text = "Refresh clothes from my game";
-                SetHint("Got " + n + " files from your game. Paint a texture, or look at a mesh for reference.", ok: true);
+                pull.Text = "Refresh from game";
+                SetHint("Got " + n + " files.", ok: true);
             }
             else
             {
-                SetHint("Could not pull clothes. The game needs to be installed. See dumps/game-clothing/pull.log.", ok: false);
+                SetHint("Could not pull. Is the game installed?", ok: false);
             }
         }
         catch (Exception ex)
@@ -204,37 +219,17 @@ sealed class ExportWorkshopForm : Form
     {
         _hint.ForeColor = ok ? Color.FromArgb(180, 210, 200) : Color.FromArgb(255, 180, 120);
         _hint.Text = text;
+        var on = !string.IsNullOrWhiteSpace(text);
+        _hint.Visible = on;
+        _hint.Height = on ? 28 : 0;
     }
 
     void SetTab(WorkshopTab tab)
     {
         _tab = tab;
         StyleModes();
-        _banner.Text = tab switch
-        {
-            WorkshopTab.Paint => "Same 3D shape as the game. Pull a texture, make a paint mod, edit the PNG, then Pack and Play on the main window.",
-            WorkshopTab.Mesh => "You will see a gray stick figure. That is the real Rollout skeleton, not a broken rig. Add your clothing mesh around it, weight-paint, then Export.",
-            _ => "These leftover navy/rowe colors are only examples. They do not show in the catalog unless you add one.",
-        };
-        SetHint(tab switch
-        {
-            WorkshopTab.Paint => _tools.HasPulledClothing
-                ? "Your paint mods are at the top. A pulled texture needs Make a paint mod before the game can wear it."
-                : "Click Get clothes from my game, then Make a paint mod on an albedo.",
-            WorkshopTab.Mesh => NextMeshHint(),
-            _ => "Add a tint only if you want that color in the menu. Otherwise leave these alone.",
-        }, ok: true);
+        _banner.Text = UiCopy.WorkshopBanner(_domain, tab);
         RebuildList();
-    }
-
-    string NextMeshHint()
-    {
-        var wip = _pieces.FirstOrDefault(p => p.IsEmptyRig);
-        if (wip != null)
-            return "Next: open " + wip.Title + " in Blender, model clothes on the bones, then Export this mesh.";
-        if (!_tools.HasPulledClothing)
-            return "Get clothes from my game first. Export needs the hoodie bind pose so the mesh does not collapse in-game.";
-        return "Create a garment, or export one you already modeled. Game files below are look-only.";
     }
 
     void RebuildList()
@@ -246,7 +241,16 @@ sealed class ExportWorkshopForm : Form
         if (_tab == WorkshopTab.Mesh)
             _list.Controls.Add(StartMeshCard());
 
-        foreach (var (title, items) in Groups())
+        var groups = Groups().ToList();
+        var any = groups.Any(g => g.Items.Count > 0);
+        if (!any)
+        {
+            var empty = UiCopy.WorkshopEmpty(_domain, _tab.Value, _tools.HasPulledClothing);
+            if (!string.IsNullOrEmpty(empty))
+                _list.Controls.Add(EmptyState(empty));
+        }
+
+        foreach (var (title, items) in groups)
         {
             if (items.Count == 0) continue;
             _list.Controls.Add(Section(title));
@@ -262,66 +266,81 @@ sealed class ExportWorkshopForm : Form
     {
         if (_tab == WorkshopTab.Paint)
         {
-            yield return ("Ready to wear (after Pack and Play)", _pieces.Where(p => !p.Sample && !p.FromGame && TextureMods.IsPaintTarget(p)).ToList());
-            yield return ("Textures from your game", _pieces.Where(p => p.FromGame && TextureMods.IsPaintTarget(p)).ToList());
-        }
-        else if (_tab == WorkshopTab.Mesh)
-        {
-            yield return ("Your garments", _pieces.Where(p => !p.Sample && !p.FromGame && p.Kind == ClothingKind.Mesh).ToList());
-            yield return ("Look at the real game clothes", _pieces.Where(p => p.Id.StartsWith("game:", StringComparison.OrdinalIgnoreCase)).ToList());
+            yield return ("Yours", VisiblePieces.Where(p => !p.FromGame && TextureMods.IsPaintTarget(p)).ToList());
+            var pulled = VisiblePieces.Where(p => p.FromGame && TextureMods.IsPaintTarget(p)).ToList();
+            foreach (var g in pulled
+                         .GroupBy(p => p.Garment ?? p.Slot)
+                         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+                yield return (g.Key, g.OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase).ToList());
         }
         else
         {
-            yield return ("Not in the game yet", _pieces.Where(p => p.Sample).ToList());
+            yield return ("Yours",
+                VisiblePieces.Where(p => !p.FromGame && p.Kind == ClothingKind.Mesh).ToList());
+            var game = VisiblePieces.Where(p => p.Id.StartsWith("game:", StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var g in game
+                         .GroupBy(p => p.Slot)
+                         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+                yield return (g.Key, g.OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase).ToList());
         }
     }
 
     Control StartMeshCard()
     {
-        var card = new Panel
+        var card = new FlowLayoutPanel
         {
-            Height = 108,
-            Margin = new Padding(0, 0, 0, 10),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = false,
+            FlowDirection = FlowDirection.TopDown,
+            Margin = new Padding(0, 0, 0, 14),
+            Padding = new Padding(14, 12, 14, 14),
             BackColor = Color.FromArgb(36, 56, 44),
-            Padding = new Padding(12, 10, 12, 10),
         };
         var title = new Label
         {
-            Dock = DockStyle.Top,
-            Height = 26,
+            AutoSize = true,
             Font = new Font("Segoe UI Semibold", 13f),
-            Text = "Create a garment",
+            Margin = new Padding(0, 0, 0, 4),
+            Text = _domain == WorkshopDomain.Skates ? "New frame or boot" : "New garment",
         };
-        var go = SmallButton("Name it and open Blender", StartNewMesh, primary: true);
-        go.Dock = DockStyle.Bottom;
-        go.Height = 32;
-        go.AutoSize = false;
-        var sub = WrapLabel(
-            "Makes a new catalog row and a Blender file with only the skeleton. Model the clothes there. Do not edit the shared kit.",
-            Color.FromArgb(180, 210, 190));
-        sub.Dock = DockStyle.Fill;
+        var sub = new Label
+        {
+            AutoSize = true,
+            Font = new Font("Segoe UI", 9.5f),
+            ForeColor = Color.FromArgb(180, 210, 190),
+            Margin = new Padding(0, 0, 0, 10),
+            Text = _domain == WorkshopDomain.Skates ? "Copies a pulled mesh." : "Opens the skeleton in Blender.",
+        };
+        var go = SmallButton("Create", StartNewMesh, primary: true);
+        go.Margin = new Padding(0, 0, 0, 0);
+        card.Controls.Add(title);
         card.Controls.Add(sub);
         card.Controls.Add(go);
-        card.Controls.Add(title);
         return card;
     }
 
     void StartNewMesh()
     {
-        using var dlg = new NewMeshForm();
+        using var dlg = new NewMeshForm(_domain);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         if (string.IsNullOrWhiteSpace(dlg.GarmentName))
         {
-            MessageBox.Show(this, "Give the garment a name.", "RoweMod", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, _domain == WorkshopDomain.Skates ? "Give the part a name." : "Give the garment a name.", "RoweMod", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         try
         {
-            var piece = MeshWork.CreateMesh(_tools.Repo, dlg.GarmentName, dlg.Slot);
-            if (_tools.Blender != null && piece.Blend != null)
-                ClothingLibrary.OpenInBlender(_tools.Blender, piece.Blend);
+            var piece = _domain == WorkshopDomain.Skates
+                ? MeshWork.CreateSkate(_tools.Repo, dlg.GarmentName, dlg.Slot)
+                : MeshWork.CreateMesh(_tools.Repo, dlg.GarmentName, dlg.Slot);
+            var open = piece.Blend ?? piece.Model;
+            if (_tools.Blender != null && open != null)
+                ClothingLibrary.OpenInBlender(_tools.Blender, open);
             _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
-            SetHint("Blender should show gray bones and no clothes. That is correct. Model the garment, then come back and Export this mesh.", ok: true);
+            SetHint(_domain == WorkshopDomain.Skates
+                ? "Edit the copy, save the glb, Use for Cook."
+                : "Gray bones are the rig. Model, then Export.", ok: true);
             RebuildList();
         }
         catch (Exception ex)
@@ -401,14 +420,29 @@ sealed class ExportWorkshopForm : Form
     {
         if (_tab == WorkshopTab.Mesh && piece.Kind == ClothingKind.Mesh && !piece.FromGame && !piece.Sample)
         {
-            var bind = MeshWork.FindBindGlb(_tools.Repo);
-            var exp = SmallButton("Export this mesh", () => BeginExport(piece, bind), primary: true);
-            exp.Enabled = piece.Blend != null && bind != null && _tools.Blender != null;
-            if (piece.IsEmptyRig)
-                _tips.SetToolTip(exp, "Add a clothing mesh in Blender first. Export will fail on an empty skeleton.");
-            else if (bind == null)
-                _tips.SetToolTip(exp, "Get clothes from my game first (hoodie bind pose).");
-            yield return exp;
+            if (_domain == WorkshopDomain.Skates)
+            {
+                var cook = SmallButton("Use for Cook", () => QueueSkateCook(piece), primary: true);
+                cook.Enabled = piece.Model != null && File.Exists(piece.Model);
+                if (!cook.Enabled)
+                    _tips.SetToolTip(cook, "Need the glb in art/skates.");
+                yield return cook;
+            }
+            else
+            {
+                var bind = MeshWork.FindBindGlb(_tools.Repo);
+                var exp = SmallButton("Export this mesh", () => BeginExport(piece, bind), primary: true);
+                exp.Enabled = piece.Blend != null && bind != null && _tools.Blender != null && !piece.IsEmptyRig;
+                if (!exp.Enabled)
+                {
+                    _tips.SetToolTip(exp, piece.IsEmptyRig
+                        ? "Add a clothing mesh in Blender first."
+                        : bind == null
+                            ? "Get from game first."
+                            : "Install Blender 5.1.");
+                }
+                yield return exp;
+            }
         }
 
         if (piece.Id.StartsWith("tex:", StringComparison.OrdinalIgnoreCase) && piece.PaintFile != null)
@@ -424,24 +458,13 @@ sealed class ExportWorkshopForm : Form
                 }
                 ClothingLibrary.OpenFile(made.Value.Png);
                 _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
-                SetHint("Paint " + made.Value.Title + " in your image app, save the PNG, then Pack and Play.", ok: true);
+                SetHint("Clean fabric normal. Edit PNG, Cook, Play.", ok: true);
                 RebuildList();
             }, primary: true);
         }
 
         if (piece.PaintFile != null && File.Exists(piece.PaintFile) && piece.ItemJson != null && !piece.FromGame)
-            yield return SmallButton("Edit the PNG", () => ClothingLibrary.OpenFile(piece.PaintFile), primary: _tab == WorkshopTab.Paint);
-
-        if (piece.Sample && piece.ItemJson != null)
-        {
-            yield return SmallButton("Add this color to the game", () =>
-            {
-                MeshWork.SetSample(piece.ItemJson, false);
-                _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
-                SetHint("Pack and Play will put " + piece.Title + " in the catalog.", ok: true);
-                RebuildList();
-            }, primary: true);
-        }
+            yield return SmallButton("Edit PNG", () => ClothingLibrary.OpenFile(piece.PaintFile), primary: _tab == WorkshopTab.Paint);
 
         var blenderFile = piece.Blend ?? piece.Model;
         if (blenderFile != null)
@@ -453,14 +476,18 @@ sealed class ExportWorkshopForm : Form
                     MessageBox.Show(this, "Install Blender 5.1 to open this.", "RoweMod", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
-                ClothingLibrary.OpenInBlender(_tools.Blender, blenderFile);
+                try
+                {
+                    ClothingLibrary.OpenInBlender(_tools.Blender, blenderFile);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, ex.Message, "Blender", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             });
             open.Enabled = _tools.Blender != null;
             yield return open;
         }
-
-        if (!piece.FromGame && piece.ItemJson != null && _tab != WorkshopTab.Mesh)
-            yield return SmallButton("Open JSON", () => ClothingLibrary.OpenFile(piece.ItemJson));
 
         if (!piece.Sample && piece.ItemJson != null && piece.Kind == ClothingKind.Texture && !piece.FromGame)
         {
@@ -471,6 +498,19 @@ sealed class ExportWorkshopForm : Form
                 RebuildList();
             });
         }
+    }
+
+    void QueueSkateCook(ClothingPiece piece)
+    {
+        if (piece.Model == null || !File.Exists(piece.Model))
+        {
+            MessageBox.Show(this, "Missing the glb in art/skates. Get skate models, then create the part again.", "RoweMod",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        MeshWork.SaveTarget(_tools.Repo, MeshWork.FromPiece(_tools.Repo, piece));
+        SavedCookTarget = true;
+        SetHint("Click Cook, then Play.", ok: true);
     }
 
     void BeginExport(ClothingPiece piece, string? bind)
@@ -504,22 +544,20 @@ sealed class ExportWorkshopForm : Form
 
     string HelpText(ClothingPiece piece)
     {
-        if (piece.Sample)
-            return piece.Slot + ". Example color only. Add it if you want this tint in the menu.";
-        if (piece.Kind == ClothingKind.Kit)
-            return "Shared skeleton. Leave this file alone — Create a garment makes your own copy.";
-        if (piece.FromGame && piece.Kind == ClothingKind.Mesh)
-            return piece.Slot + ". Look-only. Already skinned to the game. Do not start over on weights.";
         if (piece.IsEmptyRig)
-            return piece.Slot + ". Skeleton only so far. The stick figure is the real rig. Model clothes around it, then Export.";
-        if (piece.HasModeledMesh)
-            return piece.Slot + ". Has a mesh. Export if you changed Blender, then Cook and Pack and Play.";
-        if (piece.FromGame)
-            return piece.Slot + ". Texture from your game. Make a paint mod so Pack and Play can wear your edit.";
-        if (piece.PaintFile != null)
-            return piece.Slot + ". Edit the PNG, then Pack and Play. Cook runs automatically if needed.";
-        return piece.Slot + ". Color or paint. The 3D shape stays the stock game mesh.";
+            return "Skeleton only.";
+        return piece.Garment ?? piece.Slot;
     }
+
+    static Label EmptyState(string text) => new()
+    {
+        AutoSize = false,
+        Height = 48,
+        Font = new Font("Segoe UI", 11f),
+        ForeColor = Color.FromArgb(160, 176, 186),
+        Text = text,
+        Padding = new Padding(4, 12, 4, 4),
+    };
 
     Label WrapLabel(string text, Color color) => new()
     {
@@ -555,7 +593,15 @@ sealed class ExportWorkshopForm : Form
         var w = Math.Max(420, _list.ClientSize.Width - 28);
         foreach (Control c in _list.Controls)
         {
-            c.Width = w;
+            if (c.AutoSize)
+            {
+                c.MinimumSize = new Size(w, 0);
+                c.MaximumSize = new Size(w, 0);
+            }
+            else
+            {
+                c.Width = w;
+            }
             if (c.Tag is FlowLayoutPanel buttons)
             {
                 var left = buttons.Left;

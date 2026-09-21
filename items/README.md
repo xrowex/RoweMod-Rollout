@@ -2,7 +2,9 @@
 
 One JSON file per customization row. `tools/pack_mod.ps1` patches live files under this folder.
 
-`"sample": true` means the file is a template. DtPatcher skips it, so it does not appear in the game. Clothing → Kit templates → **Add this tint to the game** removes that flag.
+`"sample": true` means the file is a template. DtPatcher skips it, so it does not appear in the game. Paint a PNG instead of using colour tints.
+
+A printed shirt keeps the old graphic in its **normal** map. Paint mods write a flat fabric normal (`T_<row>-normal.png`) so the print does not ghost. Cook after you save the PNG.
 
 `row` should end with `-mod` so DtPatcher inserts it at the front of the DataTable (the menus iterate `GetDataTableRowNames` in table order).
 
@@ -38,6 +40,8 @@ One JSON file per customization row. `tools/pack_mod.ps1` patches live files und
 }
 ```
 
-Hats use `refs.HatMesh` (StaticMesh). Glasses use `refs.GlassesMesh`. Boots use `colours.Shell` / `Sole` / `Laces` / …
+Hats use `refs.HatMesh` (StaticMesh). Glasses use `refs.GlassesMesh`. Boots use `refs.SkatesMesh` plus `colours.Shell` / `Sole` / `Laces` / … Frames use `refs.BladeMesh` (StaticMesh). Wheels have no mesh — only `refs.WheelAlbedo`.
+
+Skates are a separate button in RoweMod. Do not put frame/boot work on the clothing skeleton.
 
 See the slot folders for copy-paste starters.

@@ -5,6 +5,11 @@
   "row": "hoodie-navy-mod",
   "localizedName": "Navy Hoodie (Mod)",
   "price": 0,
-  "colour": [0.035, 0.08, 0.2, 1.0],
+  "colour": [
+    0.035,
+    0.08,
+    0.2,
+    1.0
+  ],
   "previewImage": "/Game/MainFolder/UI/customization/mod-icons/T_hoodie-navy-mod"
 }

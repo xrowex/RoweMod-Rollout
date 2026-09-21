@@ -15,6 +15,7 @@ sealed class DetectedTools
     public string? OverlayUtoc { get; init; }
     public DateTime? LastExport { get; init; }
     public DateTime? LastCook { get; init; }
+    public DateTime? LastTarget { get; init; }
 
     public string RetocPath => Path.Combine(Repo, "tools", "retoc", "retoc.exe");
     public string BootstrapScript => Path.Combine(Repo, "tools", "bootstrap.ps1");
@@ -24,35 +25,6 @@ sealed class DetectedTools
     public string PullScript => Path.Combine(Repo, "tools", "pull_clothing.ps1");
     public string PulledClothingDir => Path.Combine(Repo, "dumps", "game-clothing");
     public string GamebindGlb => Path.Combine(Repo, "art", "tshirt-baggy-male.gamebind.glb");
-
-    public string SetupHint
-    {
-        get
-        {
-            if (!HasDotnet) return "Install .NET 8 SDK, then click Setup.";
-            if (GamePaks is null) return "Install Rollout Inline on Steam, then click Setup.";
-            return "";
-        }
-    }
-
-    public string ExportHint => Blender is null
-        ? "Install Blender 5.1 to export garments."
-        : "";
-
-    public string CookHint => UnrealEditor is null
-        ? "Install Unreal Engine 5.4.4 to cook a new mesh (Track B)."
-        : "";
-
-    public string PackHint
-    {
-        get
-        {
-            if (GamePaks is null) return "Install Rollout Inline on Steam.";
-            if (!HasRetoc) return "Click Setup first (downloads retoc and extracts tables).";
-            if (!HasDotnet) return "Install .NET 8.";
-            return "";
-        }
-    }
 }
 
 static class ToolPaths
@@ -96,6 +68,7 @@ static class ToolPaths
             OverlayUtoc = overlay,
             LastExport = File.Exists(export) ? File.GetLastWriteTime(export) : null,
             LastCook = File.Exists(cooked) ? File.GetLastWriteTime(cooked) : null,
+            LastTarget = File.Exists(MeshWork.TargetPath(repo)) ? File.GetLastWriteTime(MeshWork.TargetPath(repo)) : null,
         };
     }
 

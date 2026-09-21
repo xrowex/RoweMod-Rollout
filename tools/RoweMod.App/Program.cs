@@ -3,7 +3,7 @@ namespace RoweMod.App;
 static class Program
 {
     [STAThread]
-    static void Main()
+    static int Main(string[] args)
     {
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => Dump(e.Exception);
@@ -13,12 +13,17 @@ static class Program
         };
         try
         {
+            if (args.Any(a => a.Equals("--check", StringComparison.OrdinalIgnoreCase)))
+                return FlowPlaytest.Run();
+
             ApplicationConfiguration.Initialize();
             Application.Run(new MainForm());
+            return 0;
         }
         catch (Exception ex)
         {
             Dump(ex);
+            return 1;
         }
     }
 

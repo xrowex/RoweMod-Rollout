@@ -71,7 +71,7 @@ All under `/Game/MainFolder/UI/customization/data/`.
 | `DT-frames` | `S-frames` | Frames |
 | `DT-wheels` | `S-wheels` | Wheels |
 
-UI: `W-clothing-customization`, `W-generic-item-customization`, `W-character-customization`, `W-skates-customization`, `E-customization-categories`. Save: `CustomizationSaveGame`.
+UI: `W-clothing-customization`, `W-generic-item-customization`, `W-character-customization`, `W-skates-customization`, `E-customization-categories`. Save: `CustomizationSaveGame`. RoweMod splits those: **Clothing** vs **Skates**.
 
 ### `S-upper` fields
 

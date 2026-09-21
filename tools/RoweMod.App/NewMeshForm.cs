@@ -4,15 +4,18 @@ sealed class NewMeshForm : Form
 {
     readonly TextBox _name = new();
     readonly ComboBox _slot = new();
+    readonly WorkshopDomain _domain;
 
     public string GarmentName => _name.Text.Trim();
-    public string Slot => _slot.SelectedItem as string ?? "Tops";
+    public string Slot => _slot.SelectedItem as string ?? (_domain == WorkshopDomain.Skates ? "Frames" : "Tops");
 
-    public NewMeshForm()
+    public NewMeshForm(WorkshopDomain domain = WorkshopDomain.Clothing)
     {
-        Text = "Create a garment";
-        Width = 540;
-        Height = 400;
+        _domain = domain;
+        var skate = domain == WorkshopDomain.Skates;
+        Text = skate ? "New skate" : "New garment";
+        Width = 500;
+        Height = 280;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -26,35 +29,35 @@ sealed class NewMeshForm : Form
             Left = 20,
             Top = 16,
             Width = 480,
-            Height = 128,
-            Text =
-                "Blender will open with gray bones and no clothes. That is the real Rollout skeleton." +
-                Environment.NewLine + Environment.NewLine +
-                "Model the garment around those bones. Weight-paint the body bones (spine, arms, legs), not the ik helpers. Twist bones on the arms are real. Use them for sleeves." +
-                Environment.NewLine + Environment.NewLine +
-                "Tops and bottoms share this rig. Hats and hair do not.",
+            Height = 56,
+            Text = skate
+                ? "Opens a copy of a game frame or boot. Wheels are Paint."
+                : "Opens the skeleton. Model clothes on it.",
         };
 
-        var nameLab = new Label { Left = 20, Top = 156, Width = 140, Text = "Name in the menu" };
+        var nameLab = new Label { Left = 20, Top = 84, Width = 140, Text = "Name" };
         _name.Left = 160;
-        _name.Top = 152;
-        _name.Width = 340;
-        _name.Text = "wide hoodie";
+        _name.Top = 80;
+        _name.Width = 300;
+        _name.Text = skate ? "wide frame" : "wide hoodie";
 
-        var slotLab = new Label { Left = 20, Top = 196, Width = 140, Text = "Closet slot" };
+        var slotLab = new Label { Left = 20, Top = 124, Width = 140, Text = "Slot" };
         _slot.Left = 160;
-        _slot.Top = 192;
+        _slot.Top = 120;
         _slot.Width = 340;
         _slot.DropDownStyle = ComboBoxStyle.DropDownList;
-        _slot.Items.AddRange(new object[] { "Tops", "Bottoms" });
+        if (skate)
+            _slot.Items.AddRange(new object[] { "Frames", "Boots" });
+        else
+            _slot.Items.AddRange(new object[] { "Tops", "Bottoms" });
         _slot.SelectedIndex = 0;
 
         var ok = new Button
         {
-            Text = "Create and open Blender",
+            Text = "Create",
             Left = 160,
-            Top = 260,
-            Width = 210,
+            Top = 180,
+            Width = 140,
             Height = 36,
             DialogResult = DialogResult.OK,
             FlatStyle = FlatStyle.Flat,
@@ -66,8 +69,8 @@ sealed class NewMeshForm : Form
         var cancel = new Button
         {
             Text = "Cancel",
-            Left = 380,
-            Top = 260,
+            Left = 320,
+            Top = 180,
             Width = 120,
             Height = 36,
             DialogResult = DialogResult.Cancel,

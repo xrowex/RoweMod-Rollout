@@ -17,9 +17,17 @@ static class TextureMods
     {
         if (piece.Kind != ClothingKind.Texture) return false;
         if (piece.Sample) return false;
+        if (piece.Slot is "Body" or "Skin" or "Eyes") return false;
         if (piece.ItemJson != null) return true;
         if (piece.Id.StartsWith("tex:", StringComparison.OrdinalIgnoreCase))
-            return LooksLikeAlbedo(piece.Title);
+        {
+            if (piece.Slot is "Wheels")
+            {
+                var n = (piece.AssetName ?? piece.PaintFile ?? piece.Title).ToLowerInvariant();
+                return !n.Contains("normal") && !n.Contains("rough") && !n.Contains("mask");
+            }
+            return LooksLikeAlbedo(piece.AssetName ?? piece.PaintFile ?? piece.Title);
+        }
         return false;
     }
 
@@ -39,6 +47,8 @@ static class TextureMods
         if (png == null || !File.Exists(png)) return null;
         if (!Guess(piece, out var table, out var cloneRow))
             return null;
+        if (table is "DT-bodytypes" or "DT-skin" or "DT-eyes")
+            return null;
 
         var existing = FindExisting(repo, cloneRow);
         var row = existing?.Row ?? (cloneRow.EndsWith("-mod", StringComparison.OrdinalIgnoreCase)
@@ -50,21 +60,45 @@ static class TextureMods
         var destPng = Path.Combine(texDir, "T_" + row + "-albedo.png");
         File.Copy(png, destPng, overwrite: true);
 
-        var albedo = "/Game/MainFolder/Character/" + GameFolder(table) + "/" + row + "/T_" + row + "-albedo";
+        var folder = GameFolder(table);
+        var albedo = "/Game/MainFolder/Character/" + folder + "/" + row + "/T_" + row + "-albedo";
+        var normal = "/Game/MainFolder/Character/" + folder + "/" + row + "/T_" + row + "-normal";
+        var destNrm = Path.Combine(texDir, "T_" + row + "-normal.png");
+        if (table != "DT-wheels" && !File.Exists(destNrm))
+            WriteFlatNormal(destNrm, destPng);
+
         var jsonPath = existing?.JsonPath ?? Path.Combine(repo, "items", slotDir, row + ".json");
         Directory.CreateDirectory(Path.GetDirectoryName(jsonPath)!);
-        var spec = new
+        object spec;
+        if (table == "DT-wheels")
         {
-            table,
-            cloneRow,
-            row,
-            localizedName = existing?.LocalizedName ?? Human(cloneRow) + " (Paint)",
-            price = 0,
-            colour = new[] { 1.0, 1.0, 1.0, 1.0 },
-            albedo,
-        };
+            spec = new
+            {
+                table,
+                cloneRow = string.IsNullOrWhiteSpace(cloneRow) ? "wheels-white" : cloneRow,
+                row,
+                localizedName = existing?.LocalizedName ?? Human(cloneRow) + " (Paint)",
+                price = 0,
+                refs = new Dictionary<string, string> { ["WheelAlbedo"] = albedo },
+            };
+        }
+        else
+        {
+            spec = new
+            {
+                table,
+                cloneRow,
+                row,
+                localizedName = existing?.LocalizedName ?? Human(cloneRow) + " (Paint)",
+                price = 0,
+                colour = new[] { 1.0, 1.0, 1.0, 1.0 },
+                albedo,
+                normal,
+            };
+        }
         File.WriteAllText(jsonPath, JsonSerializer.Serialize(spec, JsonWrite));
-        return new PaintModResult(row, spec.localizedName, jsonPath, destPng, texDir);
+        var title = existing?.LocalizedName ?? Human(cloneRow) + " (Paint)";
+        return new PaintModResult(row, title, jsonPath, destPng, texDir);
     }
 
     public static bool NeedsCook(string repo)
@@ -75,13 +109,15 @@ static class TextureMods
             try { spec = JsonSerializer.Deserialize<ItemFile>(File.ReadAllText(json), JsonRead); }
             catch { continue; }
             if (spec == null || spec.Sample) continue;
-            if (spec.Albedo == null || !spec.Albedo.StartsWith("/Game/", StringComparison.Ordinal))
-                continue;
-            var png = FindAlbedoPng(repo, spec.Row, spec.Albedo);
-            if (png == null) continue;
-            var cooked = CookedFile(repo, spec.Albedo);
-            if (cooked == null || File.GetLastWriteTimeUtc(png) > File.GetLastWriteTimeUtc(cooked))
-                return true;
+            foreach (var gamePath in TexturePaths(spec))
+            {
+                if (!gamePath.StartsWith("/Game/", StringComparison.Ordinal)) continue;
+                var png = FindAlbedoPng(repo, spec.Row, gamePath);
+                if (png == null) continue;
+                var cooked = CookedFile(repo, gamePath);
+                if (cooked == null || File.GetLastWriteTimeUtc(png) > File.GetLastWriteTimeUtc(cooked))
+                    return true;
+            }
         }
         return false;
     }
@@ -97,7 +133,8 @@ static class TextureMods
             var stem = Path.GetFileNameWithoutExtension(file);
             if (stem.Equals(name, StringComparison.OrdinalIgnoreCase))
                 return file;
-            if (!string.IsNullOrWhiteSpace(row) &&
+            if (LooksLikeAlbedo(name) &&
+                !string.IsNullOrWhiteSpace(row) &&
                 Path.GetFileName(Path.GetDirectoryName(file))!.Equals(row, StringComparison.OrdinalIgnoreCase) &&
                 stem.Contains("albedo", StringComparison.OrdinalIgnoreCase))
                 hits.Add(file);
@@ -127,8 +164,14 @@ static class TextureMods
             var idx = Array.FindIndex(parts, p => p.Equals("Character", StringComparison.OrdinalIgnoreCase));
             if (idx >= 0 && idx + 2 < parts.Length)
             {
+                var category = parts[idx + 1];
                 var family = parts[idx + 2].Replace("overized", "oversized", StringComparison.OrdinalIgnoreCase);
                 var variant = idx + 3 < parts.Length ? parts[idx + 3] : "";
+                if (category.Equals("skates", StringComparison.OrdinalIgnoreCase))
+                {
+                    family = variant.Replace("overized", "oversized", StringComparison.OrdinalIgnoreCase);
+                    variant = idx + 4 < parts.Length ? parts[idx + 4] : "";
+                }
                 if (variant.Contains('.', StringComparison.Ordinal)) variant = "";
                 if (family.Equals("cargos", StringComparison.OrdinalIgnoreCase) &&
                     (IsJunkVariant(variant) || variant.Equals("cotton", StringComparison.OrdinalIgnoreCase)))
@@ -146,12 +189,18 @@ static class TextureMods
             cloneRow = piece.BasedOn;
         if (string.IsNullOrWhiteSpace(cloneRow))
         {
-            var n = Path.GetFileNameWithoutExtension(piece.Title)
+            var n = Path.GetFileNameWithoutExtension(piece.AssetName ?? piece.Title)
                 .Replace(" (from your game)", "", StringComparison.OrdinalIgnoreCase);
             if (!LooksLikeAlbedo(n) && !n.Contains("FABRIC", StringComparison.OrdinalIgnoreCase) &&
                 !n.Contains("7148", StringComparison.OrdinalIgnoreCase))
                 cloneRow = n;
         }
+        if (table == "DT-wheels")
+            cloneRow = "wheels-white";
+        if (table == "DT-frames" && string.IsNullOrWhiteSpace(cloneRow))
+            cloneRow = "standard-flat-frame";
+        if (table == "DT-boot" && string.IsNullOrWhiteSpace(cloneRow))
+            cloneRow = "standard-boot";
 
         return !string.IsNullOrWhiteSpace(table) && !string.IsNullOrWhiteSpace(cloneRow);
     }
@@ -172,12 +221,50 @@ static class TextureMods
                 if (spec?.CloneRow != null &&
                     !spec.Sample &&
                     spec.CloneRow.Equals(cloneRow, StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(spec.Albedo))
+                    HasTexture(spec))
                     return new ExistingMod(spec.Row ?? "", spec.LocalizedName, json);
             }
             catch { /* skip bad item */ }
         }
         return null;
+    }
+
+    static bool HasTexture(ItemFile spec) =>
+        !string.IsNullOrWhiteSpace(spec.Albedo) || TexturePaths(spec).Any();
+
+    public static void WriteFlatNormal(string dest, string? albedoPng = null)
+    {
+        var w = 1024;
+        var h = 1024;
+        if (albedoPng != null && File.Exists(albedoPng))
+        {
+            using var src = Image.FromFile(albedoPng);
+            w = Math.Max(64, src.Width);
+            h = Math.Max(64, src.Height);
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        using var bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+        using (var g = Graphics.FromImage(bmp))
+            g.Clear(Color.FromArgb(128, 128, 255));
+        bmp.Save(dest, System.Drawing.Imaging.ImageFormat.Png);
+    }
+
+    static IEnumerable<string> TexturePaths(ItemFile spec)
+    {
+        if (!string.IsNullOrWhiteSpace(spec.Albedo))
+            yield return spec.Albedo;
+        if (!string.IsNullOrWhiteSpace(spec.Normal))
+            yield return spec.Normal;
+        if (!string.IsNullOrWhiteSpace(spec.Roughness))
+            yield return spec.Roughness;
+        if (spec.Refs == null) yield break;
+        foreach (var kv in spec.Refs)
+        {
+            if (kv.Key.Contains("Mesh", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.IsNullOrWhiteSpace(kv.Value))
+                yield return kv.Value;
+        }
     }
 
     static IEnumerable<string> ItemFiles(string repo)
@@ -251,6 +338,9 @@ static class TextureMods
         public string? Row { get; set; }
         public string? LocalizedName { get; set; }
         public string? Albedo { get; set; }
+        public string? Normal { get; set; }
+        public string? Roughness { get; set; }
+        public Dictionary<string, string>? Refs { get; set; }
         public bool Sample { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 # Rollout Inline clothing mods
 
-Use **RoweMod.exe** (`RoweMod.cmd`, `dist\RoweMod.exe` after publish, or `dotnet run --project tools/RoweMod.App`) for Setup / Export / Cook / Pack and Play / Ship. This page is the detail behind those buttons.
+Use **RoweMod.exe** (`RoweMod.cmd`, `dist\RoweMod.exe` after publish, or `dotnet run --project tools/RoweMod.App`) for Setup / Clothing / Skates / Cook / Play. This page is the detail behind those buttons.
 
 To look at the live hoodie (and other stock clothes) in Blender, click **Export** → **Pull clothing from my game**. That writes glTF + PNG under `dumps/game-clothing` from your Steam install. Do not commit that folder. A `.usmap` from UE4SS DumpUSMAP (`dumps/mappings.usmap`) makes mesh decode much more reliable.
 
@@ -36,7 +36,7 @@ This is how beige/black/white hoodies work: same `hoodie-male` / `hoodie-female`
 
 1. Copy a file under `items/` (kit templates have `"sample": true` and are not packed). Change `row`, `localizedName`, `colour`, `price`, and delete `"sample"` if you want it in the game.
 2. Omit `upperMale` to keep the clone’s stock mesh. Set it only if you cooked a new skeletal mesh.
-3. In **RoweMod.exe**, click **Setup** once, then **Pack and Play**. Scripts still work if you prefer a terminal:
+3. In **RoweMod.exe**, click **Setup** once, then **Play**. Scripts still work if you prefer a terminal:
 
 ```powershell
 .\tools\bootstrap.ps1
@@ -55,7 +55,7 @@ Use this when you need a new silhouette.
 2. Click **Export** in RoweMod (or run `art/export_shirt.py`). That is the gamebind path: it rebinds weights onto `hoodie-male.glb` joints **without** aiming tails, then stitches IBMs. The visual kit in `main-rig.blend` is for painting only. The live game skeleton uses the original rest rotations.
 3. Click **Cook**. Import stays in the dummy project `ue/RollerSkate/RollerSkate.uproject` at a **new** `/Game/MainFolder/...` path. Blender is meters; Unreal and the game skeleton are centimeters — `import_shirt.py` scales by 100. Assign skeleton `main-rig` and material `MI-Upper`. Do not pack `main-rig` or `MI-Upper` — the live game already has them.
 4. Point the item JSON `upperMale` at that path (see `items/upper/tshirt-baggy-mod.json`).
-5. Click **Pack and Play** (or **Mesh to game** to run Export → Cook → pack + launch). New IoStore packages only load if something the game already loads hard-references them (the patched `DT-upper` row). `LoadAsset` from Lua is not enough.
+5. Click **Play**. New IoStore packages only load if something the game already loads hard-references them (the patched `DT-upper` row). `LoadAsset` from Lua is not enough.
 
 ## Slots
 
@@ -65,6 +65,11 @@ Use this when you need a new silhouette.
 | `DT-lower` | `S-lower` | SkeletalMesh |
 | `DT-hats` | `S-hats` | StaticMesh |
 | `DT-glasses` / `DT-hair` / `DT-beard` | matching `S-*` | mixed |
+| `DT-boot` | `S-boot` | `SkatesMesh` (skeletal) + colour channels |
+| `DT-frames` | `S-frames` | `BladeMesh` (static) |
+| `DT-wheels` | `S-wheels` | `WheelAlbedo` only — no mesh |
+
+Skates have their own button in RoweMod. Do not rig frames or boots to `main-rig`.
 
 Upper fields that matter for a new row: `UpperMale`, `UpperFemale`, `Albedo`, `Normal`, `Roughness`, `BodyMask`, `HeadMask`, `PreviewImage`, `LocalizedName`, `Price`, `Colour`.
 

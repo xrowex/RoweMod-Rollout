@@ -46,7 +46,10 @@ public static class ClothingPuller
             ? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "dumps", "game-clothing"))
             : Path.GetFullPath(outDir);
         Directory.CreateDirectory(Path.Combine(outDir, "meshes"));
-        Directory.CreateDirectory(Path.Combine(outDir, "textures"));
+        var texRoot = Path.Combine(outDir, "textures");
+        if (Directory.Exists(texRoot))
+            Directory.Delete(texRoot, true);
+        Directory.CreateDirectory(texRoot);
 
         usmap ??= FindMappings(Path.GetFullPath(Path.Combine(outDir, "..")), gameDir);
         Console.WriteLine("Game " + gameDir);
@@ -115,7 +118,7 @@ public static class ClothingPuller
                     }
                     else if (exp is UTexture2D tex)
                     {
-                        var saved = WriteTexture(tex, Path.Combine(outDir, "textures"));
+                        var saved = WriteTexture(tex, Path.Combine(outDir, "textures"), pkg);
                         if (saved != null)
                         {
                             Console.WriteLine("TEX  " + saved);
@@ -189,15 +192,25 @@ public static class ClothingPuller
         return Path.IsPathRooted(saved) ? saved : Path.Combine(dir, saved);
     }
 
-    static string? WriteTexture(UTexture2D tex, string dir)
+    static string? WriteTexture(UTexture2D tex, string dir, string pkg)
     {
-        Directory.CreateDirectory(dir);
+        var destDir = Path.Combine(dir, TextureFolder(pkg));
+        Directory.CreateDirectory(destDir);
         var decoded = CUE4Parse_Conversion.Textures.TextureDecoder.Decode(tex);
         if (decoded == null) return null;
-        var path = Path.Combine(dir, tex.Name + ".png");
+        var path = Path.Combine(destDir, tex.Name + ".png");
         using var data = decoded.Encode(SkiaSharp.SKEncodedImageFormat.Png, 90);
         File.WriteAllBytes(path, data.ToArray());
         return path;
+    }
+
+    static string TextureFolder(string pkg)
+    {
+        var p = pkg.Replace('\\', '/');
+        var i = p.IndexOf("Character/", StringComparison.OrdinalIgnoreCase);
+        var after = i >= 0 ? p[(i + "Character/".Length)..] : Path.GetFileNameWithoutExtension(p);
+        var folder = Path.GetDirectoryName(after)?.Replace('/', Path.DirectorySeparatorChar);
+        return string.IsNullOrWhiteSpace(folder) ? "other" : folder;
     }
 
     static string Rel(string root, string full) =>

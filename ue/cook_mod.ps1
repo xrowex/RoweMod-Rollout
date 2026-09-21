@@ -14,6 +14,7 @@ $py = (Resolve-Path $ImportScript).Path
 
 $previewPy = Join-Path $PSScriptRoot "RollerSkate\Content\Python\import_previews.py"
 $itemTexPy = Join-Path $PSScriptRoot "RollerSkate\Content\Python\import_item_textures.py"
+$skatePy = Join-Path $PSScriptRoot "RollerSkate\Content\Python\import_skate.py"
 
 Write-Host "Editor: $cmd"
 Write-Host "Importing shirt via $py..."
@@ -30,6 +31,12 @@ if (Test-Path $itemTexPy) {
     Write-Host "Importing item textures via $itemTexPy..."
     & $cmd $project -unattended -nopause -nosplash -NullRHI -log -ExecutePythonScript="$itemTexPy"
     if ($LASTEXITCODE -ne 0) { Write-Warning "Item texture import exit $LASTEXITCODE" }
+}
+
+if (Test-Path $skatePy) {
+    Write-Host "Importing skate mesh via $skatePy..."
+    & $cmd $project -unattended -nopause -nosplash -NullRHI -log -ExecutePythonScript="$skatePy"
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Skate import exit $LASTEXITCODE" }
 }
 
 Write-Host "Cooking Windows..."

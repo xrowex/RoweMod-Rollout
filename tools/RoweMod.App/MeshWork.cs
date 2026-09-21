@@ -13,6 +13,7 @@ sealed class CookTarget
     public string Gamebind { get; set; } = "";
     public string BindGlb { get; set; } = "";
     public string? ItemJson { get; set; }
+    public string ImportKind { get; set; } = "skeletal";
 }
 
 static class MeshWork
@@ -42,16 +43,23 @@ static class MeshWork
     {
         var meshName = MeshFileName(piece);
         var meshDir = MeshGameDir(piece);
-        var bind = FindBindGlb(repo) ?? "";
+        var skate = ClothingLibrary.IsSkate(piece);
+        var glb = skate
+            ? (piece.Model ?? Path.Combine(repo, "art", "skates", piece.Id + ".glb"))
+            : Path.Combine(repo, "art", meshName + ".glb");
+        var bind = skate ? (FindSkateRef(repo, piece.Slot) ?? "") : (FindBindGlb(repo) ?? "");
         return new CookTarget
         {
             MeshName = meshName,
             MeshDir = meshDir,
             Blend = piece.Blend ?? "",
-            Glb = Path.Combine(repo, "art", meshName + ".glb"),
-            Gamebind = Path.Combine(repo, "art", meshName + ".gamebind.glb"),
+            Glb = glb,
+            Gamebind = skate ? glb : Path.Combine(repo, "art", meshName + ".gamebind.glb"),
             BindGlb = bind,
             ItemJson = piece.ItemJson,
+            ImportKind = piece.Slot.Equals("Frames", StringComparison.OrdinalIgnoreCase)
+                ? "static"
+                : skate ? "skeletal-skate" : "skeletal",
         };
     }
 
@@ -109,6 +117,85 @@ static class MeshWork
         if (!string.IsNullOrWhiteSpace(target.Blend)) env["ROWE_BLEND"] = target.Blend;
         if (!string.IsNullOrWhiteSpace(target.BindGlb)) env["ROWE_BIND_GLB"] = target.BindGlb;
         return env;
+    }
+
+    public static ClothingPiece CreateSkate(string repo, string title, string slot)
+    {
+        var frames = slot.Equals("Frames", StringComparison.OrdinalIgnoreCase);
+        if (!frames && !slot.Equals("Boots", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("New skate meshes are frames or boots. Wheels are a paint.");
+
+        var row = Slug(title);
+        if (!row.EndsWith("-mod", StringComparison.OrdinalIgnoreCase))
+            row += "-mod";
+
+        var table = frames ? "DT-frames" : "DT-boot";
+        var folder = frames ? "frames" : "boots";
+        var clone = frames ? "standard-flat-frame" : "standard-boot";
+        var refKey = frames ? "BladeMesh" : "SkatesMesh";
+        var meshDir = "/Game/MainFolder/Character/skates/" + folder + "/" + row;
+        var meshAsset = meshDir + "/" + row;
+
+        var jsonPath = Path.Combine(repo, "items", folder, row + ".json");
+        Directory.CreateDirectory(Path.GetDirectoryName(jsonPath)!);
+        if (File.Exists(jsonPath))
+            throw new InvalidOperationException("Item already exists: " + row);
+
+        var pulled = FindSkateRef(repo, slot)
+            ?? throw new InvalidOperationException("Get skate models from my game first, then create a part.");
+        var artDir = Path.Combine(repo, "art", "skates");
+        Directory.CreateDirectory(artDir);
+        var glb = Path.Combine(artDir, row + ".glb");
+        if (!File.Exists(glb))
+            File.Copy(pulled, glb);
+
+        var spec = new Dictionary<string, object?>
+        {
+            ["table"] = table,
+            ["cloneRow"] = clone,
+            ["row"] = row,
+            ["localizedName"] = title.Trim() + " (Mod)",
+            ["price"] = 0,
+            ["refs"] = new Dictionary<string, string> { [refKey] = meshAsset },
+        };
+        File.WriteAllText(jsonPath, JsonSerializer.Serialize(spec, Json));
+
+        return new ClothingPiece
+        {
+            Id = row,
+            Title = title.Trim() + " (Mod)",
+            Slot = slot,
+            Kind = ClothingKind.Mesh,
+            BasedOn = clone,
+            ItemJson = jsonPath,
+            Model = glb,
+            Folder = Path.GetDirectoryName(jsonPath),
+            Table = table,
+            MeshAsset = meshAsset,
+            CanExport = false,
+        };
+    }
+
+    public static string? FindSkateRef(string repo, string slot)
+    {
+        var root = Path.Combine(repo, "dumps", "game-clothing", "meshes");
+        if (!Directory.Exists(root)) return null;
+        var frames = slot.Equals("Frames", StringComparison.OrdinalIgnoreCase);
+        var prefer = frames
+            ? new[] { "standard-flat-frame", "flat-frame", "/skates/frames/" }
+            : new[] { "standard-boots", "standard-boot", "/skates/boots/" };
+        string? fallback = null;
+        foreach (var file in Directory.GetFiles(root, "*.glb", SearchOption.AllDirectories))
+        {
+            var n = file.Replace('\\', '/').ToLowerInvariant();
+            if (prefer.Any(p => n.Contains(p, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (n.Contains(prefer[0], StringComparison.OrdinalIgnoreCase))
+                    return file;
+                fallback ??= file;
+            }
+        }
+        return fallback;
     }
 
     public static ClothingPiece CreateMesh(string repo, string title, string slot)
@@ -198,6 +285,10 @@ static class MeshWork
             var i = piece.MeshAsset.LastIndexOf('/');
             if (i > 0) return piece.MeshAsset[..i];
         }
+        if (piece.Slot.Equals("Frames", StringComparison.OrdinalIgnoreCase))
+            return "/Game/MainFolder/Character/skates/frames/" + piece.Id;
+        if (piece.Slot.Equals("Boots", StringComparison.OrdinalIgnoreCase))
+            return "/Game/MainFolder/Character/skates/boots/" + piece.Id;
         var folder = piece.Slot.Equals("Bottoms", StringComparison.OrdinalIgnoreCase) ? "lower" : "upper";
         return "/Game/MainFolder/Character/" + folder + "/" + piece.Id;
     }

@@ -23,6 +23,7 @@ def _load_target():
 
 
 _TARGET = _load_target()
+IMPORT_KIND = str(_TARGET.get("importKind") or "skeletal").lower()
 SHIRT_FBX = str(REPO / "art" / "tshirt-baggy-male.fbx")
 SHIRT_GLB = str(_TARGET.get("gamebind") or (REPO / "art" / "tshirt-baggy-male.gamebind.glb"))
 HOODIE_GLB = str(
@@ -224,6 +225,9 @@ def install_skeleton(hoodie_skel):
 
 
 def main():
+    if IMPORT_KIND in ("static", "skeletal-skate"):
+        log("skip shirt import (skate cook)")
+        return
     log("target mesh=" + MESH_NAME + " dir=" + MESH_DIR + " glb=" + SHIRT_GLB)
     delete_if_exists(MESH_PATH)
     delete_if_exists(MESH_DIR + "/" + MESH_NAME + "_Skeleton")

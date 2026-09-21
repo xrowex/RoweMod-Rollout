@@ -1,0 +1,10 @@
+{
+  "table": "DT-frames",
+  "cloneRow": "standard-flat-frame",
+  "row": "rowe-frame-mod",
+  "localizedName": "rowe frame (Mod)",
+  "price": 0,
+  "refs": {
+    "BladeMesh": "/Game/MainFolder/Character/skates/frames/rowe-frame-mod/rowe-frame-mod"
+  }
+}

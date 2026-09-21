@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using RoweMod.Core;
 
 namespace RoweMod.App;
 
@@ -7,9 +8,10 @@ sealed class MainForm : Form
 {
     readonly Button _setup = MakeButton("Setup");
     readonly Button _export = MakeButton("Clothing");
+    readonly Button _skates = MakeButton("Skates");
+    readonly Button _gallery = MakeButton("Gallery");
     readonly Button _cook = MakeButton("Cook");
-    readonly Button _pack = MakeButton("Pack and Play");
-    readonly Button _ship = MakeButton("Mesh to game");
+    readonly Button _pack = MakeButton("Play");
     ClothingPiece? _exportTarget;
     readonly FlowLayoutPanel _chips = new();
     readonly TextBox _log = new();
@@ -19,15 +21,20 @@ sealed class MainForm : Form
     readonly ToolStripStatusLabel _exportStatus = new() { Spring = true };
     readonly ToolStripStatusLabel _cookStatus = new() { Spring = true };
     readonly ToolStripStatusLabel _overlayStatus = new() { Spring = true };
-    readonly ToolTip _tips = new();
     DetectedTools _toolsState;
     bool _busy;
+
+    public HowToGuide HowTo => _howTo;
+    public IReadOnlyList<string> Toolbar => new[]
+    {
+        _setup.Text, _export.Text, _skates.Text, _gallery.Text, _cook.Text, _pack.Text,
+    };
 
     public MainForm()
     {
         _toolsState = ToolPaths.Detect();
         Text = "RoweMod × Rollout";
-        Width = 1180;
+        Width = 1280;
         Height = 760;
         MinimumSize = new Size(1000, 600);
         StartPosition = FormStartPosition.CenterScreen;
@@ -39,16 +46,17 @@ sealed class MainForm : Form
         {
             Dock = DockStyle.Top,
             Height = 64,
-            ColumnCount = 5,
+            ColumnCount = 6,
             Padding = new Padding(10, 10, 10, 4),
         };
-        for (var i = 0; i < 5; i++)
-            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+        for (var i = 0; i < 6; i++)
+            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.66f));
         buttons.Controls.Add(_setup, 0, 0);
         buttons.Controls.Add(_export, 1, 0);
-        buttons.Controls.Add(_cook, 2, 0);
-        buttons.Controls.Add(_pack, 3, 0);
-        buttons.Controls.Add(_ship, 4, 0);
+        buttons.Controls.Add(_skates, 2, 0);
+        buttons.Controls.Add(_gallery, 3, 0);
+        buttons.Controls.Add(_cook, 4, 0);
+        buttons.Controls.Add(_pack, 5, 0);
         foreach (Control c in buttons.Controls)
             c.Dock = DockStyle.Fill;
 
@@ -96,27 +104,20 @@ sealed class MainForm : Form
         _status.SendToBack();
 
         _setup.Click += async (_, _) => await RunJob("Setup", SetupAsync);
-        _export.Click += async (_, _) => await OpenExportWorkshop();
+        _export.Click += async (_, _) => await OpenExportWorkshop(WorkshopDomain.Clothing);
+        _skates.Click += async (_, _) => await OpenExportWorkshop(WorkshopDomain.Skates);
+        _gallery.Click += (_, _) => OpenGallery();
         _cook.Click += async (_, _) => await RunJob("Cook", () => CookAsync());
-        _pack.Click += async (_, _) => await RunJob("Pack and Play", PackAndPlayAsync);
-        _ship.Click += async (_, _) => await ConfirmShip();
+        _pack.Click += async (_, _) => await RunJob("Play", PackAndPlayAsync);
 
         WireHover(_setup, "setup");
         WireHover(_export, "clothing");
+        WireHover(_skates, "skates");
+        WireHover(_gallery, "gallery");
         WireHover(_cook, "cook");
         WireHover(_pack, "pack");
-        WireHover(_ship, "meshrun");
-
-        _tips.SetToolTip(_setup, "First time only. Finds the game and copies the clothing menus.");
-        _tips.SetToolTip(_export, "Paint a texture, tint a color, or model a new shape.");
-        _tips.SetToolTip(_cook, "Unreal prepares paint or the last exported mesh. Does not launch the game.");
-        _tips.SetToolTip(_pack, "Write your items into the game and launch.");
-        _tips.SetToolTip(_ship, "After you modeled: export, cook, pack, launch.");
 
         RefreshChrome();
-        Log("Installed. How to on the right is the next click.");
-        Log("Setup once, then Pack and Play to see the baggy tee and Rowe jeans.");
-        Log("Repo " + _toolsState.Repo);
     }
 
     static Button MakeButton(string text)
@@ -199,26 +200,26 @@ sealed class MainForm : Form
         if (code != 0) throw new InvalidOperationException("Setup failed (" + code + ")");
     }
 
-    async Task OpenExportWorkshop()
+    void OpenGallery()
     {
-        using var dlg = new ExportWorkshopForm(_toolsState);
-        if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.ExportMesh)
+        using var dlg = new GalleryForm(_toolsState);
+        dlg.ShowDialog(this);
+        _toolsState = ToolPaths.Detect();
+        RefreshChrome();
+    }
+
+    async Task OpenExportWorkshop(WorkshopDomain domain)
+    {
+        using var dlg = new ExportWorkshopForm(_toolsState, domain);
+        var result = dlg.ShowDialog(this);
+        _toolsState = ToolPaths.Detect();
+        RefreshChrome();
+        if (dlg.SavedCookTarget)
+            Log("Cook target saved.");
+        if (result != DialogResult.OK || !dlg.ExportMesh)
             return;
         _exportTarget = dlg.ExportTarget;
         await RunJob("Export", ExportMeshAsync);
-    }
-
-    async Task ConfirmShip()
-    {
-        var ask = MessageBox.Show(
-            this,
-            "Mesh to game exports the last garment (or the baggy tee), cooks it, writes the overlay, and launches.\n\n" +
-            "That is the new-mesh path. For a color or a painted PNG, use Pack and Play.\n\nContinue?",
-            "Mesh to game",
-            MessageBoxButtons.OKCancel,
-            MessageBoxIcon.Question);
-        if (ask != DialogResult.OK) return;
-        await RunJob("Mesh to game", ShipAsync);
     }
 
     async Task ExportMeshAsync()
@@ -251,7 +252,7 @@ sealed class MainForm : Form
         var code = await RunPowerShell(_toolsState.CookScript, "-SkipPack");
         if (code != 0) throw new InvalidOperationException("Cook failed (" + code + ")");
         if (!packing)
-            Log("Cook finished. Use Pack and Play to write the overlay.");
+            Log("Cook finished.");
     }
 
     async Task PackAndPlayAsync()
@@ -259,7 +260,7 @@ sealed class MainForm : Form
         if (TextureMods.NeedsCook(_toolsState.Repo))
         {
             if (_toolsState.UnrealEditor is null)
-                throw new InvalidOperationException("Painted textures need Unreal 5.4.4 to Cook before Pack and Play.");
+                throw new InvalidOperationException("Painted textures need Unreal 5.4.4 to Cook before Play.");
             Log("Paint is newer than the last cook. Cooking first...");
             await CookAsync(packing: true);
         }
@@ -270,51 +271,27 @@ sealed class MainForm : Form
             p.Kill(true);
         }
 
-        Log("Patching item JSON into DataTables...");
-        var patched = await Task.Run(() =>
-        {
-            var oldOut = Console.Out;
-            var oldErr = Console.Error;
-            using var writer = new LogTextWriter(Log);
-            Console.SetOut(writer);
-            Console.SetError(writer);
-            try
-            {
-                return DtPatcher.Program.PatchAllItems(_toolsState.Repo);
-            }
-            finally
-            {
-                Console.SetOut(oldOut);
-                Console.SetError(oldErr);
-            }
-        });
-        if (patched != 0)
-            throw new InvalidOperationException("DtPatcher failed (" + patched + ")");
+        if (_toolsState.GamePaks is null)
+            throw new InvalidOperationException("Game folder not found.");
 
-        var packArgs = new List<string> { "-SkipPatch" };
-        if (_toolsState.GamePaks != null)
+        Log("Syncing subscribed gallery mods...");
+        try
         {
-            packArgs.Add("-GamePaks");
-            packArgs.Add("\"" + _toolsState.GamePaks + "\"");
+            await new GalleryClient().SyncSubscriptionsAsync(_toolsState.Repo, Log);
         }
-        var code = await RunPowerShell(_toolsState.PackScript, packArgs.ToArray());
-        if (code != 0) throw new InvalidOperationException("Pack failed (" + code + ")");
+        catch (Exception ex)
+        {
+            Log("Gallery sync skipped: " + ex.Message);
+        }
 
-        var overlay = _toolsState.GamePaks is null
-            ? null
-            : Path.Combine(_toolsState.GamePaks, "RollerSkate-Windows_P.utoc");
-        if (overlay != null && File.Exists(overlay))
+        await Task.Run(() => ModMerge.Pack(_toolsState.Repo, _toolsState.GamePaks, Log));
+
+        var overlay = Path.Combine(_toolsState.GamePaks, "RollerSkate-Windows_P.utoc");
+        if (File.Exists(overlay))
             Log("Overlay " + overlay);
 
         Log("Launching steam://run/4464990");
-        Process.Start(new ProcessStartInfo("steam://run/4464990") { UseShellExecute = true });
-    }
-
-    async Task ShipAsync()
-    {
-        await ExportMeshAsync();
-        await CookAsync();
-        await PackAndPlayAsync();
+        ModMerge.LaunchGame();
     }
 
     Task<int> RunPowerShell(string script, params string[] extra) =>
@@ -381,9 +358,10 @@ sealed class MainForm : Form
         _setup.Enabled = !_busy && !setupDone;
         StyleSetupButton(setupDone);
         _export.Enabled = !_busy;
+        _skates.Enabled = !_busy;
+        _gallery.Enabled = !_busy;
         _cook.Enabled = !_busy && t.UnrealEditor != null;
         _pack.Enabled = !_busy && t.GamePaks != null && t.HasRetoc && t.HasDotnet;
-        _ship.Enabled = !_busy && t.Blender != null && t.UnrealEditor != null && t.GamePaks != null && t.HasRetoc && t.HasDotnet;
 
         RebuildChips(t, setupDone);
         _howTo.Bind(t);
@@ -395,9 +373,6 @@ sealed class MainForm : Form
             ? "Cook  " + cook.ToString("g")
             : "Cook  —";
         _overlayStatus.Text = t.OverlayUtoc != null ? "In the game" : "Not in the game yet";
-        _tips.SetToolTip(_setup, setupDone
-            ? "Setup already finished. The green chip stays on."
-            : "First time only. Finds the game and copies the clothing menus.");
     }
 
     void StyleSetupButton(bool done)
@@ -424,11 +399,11 @@ sealed class MainForm : Form
     {
         _chips.SuspendLayout();
         _chips.Controls.Clear();
-        _chips.Controls.Add(Chip(setupDone ? "Setup complete" : "Setup needed", setupDone, true));
-        _chips.Controls.Add(Chip(t.GamePaks != null ? "Game found" : "No game", t.GamePaks != null, false));
-        _chips.Controls.Add(Chip(t.HasPulledClothing ? "Clothes pulled" : "Clothes not pulled", t.HasPulledClothing, false));
-        _chips.Controls.Add(Chip(t.Blender != null ? "Blender 5.1" : "No Blender", t.Blender != null, false));
-        _chips.Controls.Add(Chip(t.UnrealEditor != null ? "Unreal 5.4" : "No Unreal", t.UnrealEditor != null, false));
+        _chips.Controls.Add(Chip(setupDone ? "Setup" : "Setup needed", setupDone, true));
+        _chips.Controls.Add(Chip(t.GamePaks != null ? "Game" : "No game", t.GamePaks != null, false));
+        _chips.Controls.Add(Chip(t.HasPulledClothing ? "Pulled" : "Not pulled", t.HasPulledClothing, false));
+        _chips.Controls.Add(Chip(t.Blender != null ? "Blender" : "No Blender", t.Blender != null, false));
+        _chips.Controls.Add(Chip(t.UnrealEditor != null ? "Unreal" : "No Unreal", t.UnrealEditor != null, false));
         _chips.ResumeLayout();
     }
 

@@ -72,6 +72,21 @@ function Stage-CookedAsset([string]$gamePath) {
     return $copied
 }
 
+$workshop = Join-Path $repo "dumps\workshop"
+if (Test-Path $workshop) {
+    Get-ChildItem $workshop -Directory | ForEach-Object {
+        $cooked = Join-Path $_.FullName "cooked"
+        if (-not (Test-Path $cooked)) { return }
+        Get-ChildItem $cooked -Recurse -File | ForEach-Object {
+            $rel = $_.FullName.Substring($cooked.Length).TrimStart("\")
+            $dst = Join-Path $stageContent $rel
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            Copy-Item $_.FullName $dst -Force
+            Write-Host "staged workshop $($_.Name)"
+        }
+    }
+}
+
 $itemsDir = Join-Path $repo "items"
 Get-ChildItem $itemsDir -Filter "*.json" -Recurse | ForEach-Object {
     $spec = Get-Content $_.FullName -Raw | ConvertFrom-Json

@@ -31,9 +31,53 @@ public static class Program
         throw new DirectoryNotFoundException("RoweMod repo root not found from " + (start ?? AppContext.BaseDirectory));
     }
 
-    public static int PatchAllItems(string? repo = null) => Run(new[] { "--all-items" }, repo);
+    public static int PatchAllItems(string? repo = null, IEnumerable<string>? extraItems = null, Action<string>? log = null)
+    {
+        var args = new List<string> { "--all-items" };
+        if (extraItems != null)
+        {
+            foreach (var item in extraItems)
+            {
+                args.Add("--item");
+                args.Add(item);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(repo))
+        {
+            foreach (var item in DiscoverWorkshopItems(repo))
+            {
+                args.Add("--item");
+                args.Add(item);
+            }
+        }
+        return Run(args.ToArray(), repo, log);
+    }
 
-    public static int Run(string[] args, string? repoOverride = null)
+    static Action<string> Out = Console.WriteLine;
+
+    public static IEnumerable<string> DiscoverWorkshopItems(string repo)
+    {
+        var root = Path.Combine(repo, "dumps", "workshop");
+        if (!Directory.Exists(root)) yield break;
+        foreach (var item in Directory.GetFiles(root, "item.json", SearchOption.AllDirectories))
+            yield return item;
+    }
+
+    public static int Run(string[] args, string? repoOverride = null, Action<string>? log = null)
+    {
+        var prev = Out;
+        Out = log ?? Console.WriteLine;
+        try
+        {
+            return RunCore(args, repoOverride);
+        }
+        finally
+        {
+            Out = prev;
+        }
+    }
+
+    static int RunCore(string[] args, string? repoOverride)
     {
         var repo = string.IsNullOrWhiteSpace(repoOverride)
             ? DiscoverRepo()
@@ -77,32 +121,43 @@ public static class Program
                 : FindTable(repo, "DT-upper");
             if (src == null || !File.Exists(src))
             {
-                Console.Error.WriteLine("missing table to list");
+                Out("missing table to list");
                 return 1;
             }
             var listAsset = Load(src, mappings);
-            return ListRows(listAsset);
+            return ListRows(listAsset, dumpProps: args.Any(a => a == "--props"));
         }
 
         var specs = new List<(string Path, ItemSpec Spec)>();
+        var seenRows = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var itemPath in itemPaths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var full = Path.GetFullPath(itemPath);
             if (!File.Exists(full))
             {
-                Console.Error.WriteLine("missing item " + full);
+                Out("missing item " + full);
                 return 1;
             }
             var spec = Newtonsoft.Json.JsonConvert.DeserializeObject<ItemSpec>(File.ReadAllText(full)) ?? new ItemSpec();
             spec.Normalize();
             if (string.IsNullOrWhiteSpace(spec.Row) || string.IsNullOrWhiteSpace(spec.CloneRow))
             {
-                Console.Error.WriteLine("item needs row + cloneRow: " + full);
+                Out("item needs row + cloneRow: " + full);
                 return 1;
             }
             if (spec.Sample && !includeSamples)
             {
-                Console.WriteLine("SKIP sample " + spec.Row);
+                Out("SKIP sample " + spec.Row);
+                continue;
+            }
+            if (!seenRows.Add(spec.Row))
+            {
+                Out("SKIP duplicate " + spec.Row + " " + full);
+                continue;
+            }
+            if (!ReadyToPatch(repo, spec))
+            {
+                Out("SKIP " + spec.Row + " (no cooked mesh yet)");
                 continue;
             }
             specs.Add((full, spec));
@@ -113,12 +168,12 @@ public static class Program
         foreach (var leftover in Directory.GetFiles(patchedDir, "*.*"))
         {
             File.Delete(leftover);
-            Console.WriteLine("CLEARED " + leftover);
+            Out("CLEARED " + leftover);
         }
 
         if (specs.Count == 0)
         {
-            Console.WriteLine("no live items (kit samples are templates and are not packed)");
+            Out("no live items (kit samples are templates and are not packed)");
             return 0;
         }
 
@@ -128,27 +183,27 @@ public static class Program
             var src = FindTable(repo, tableName);
             if (src == null)
             {
-                Console.Error.WriteLine("missing source table " + tableName + " — run tools/extract_tables.ps1");
+                Out("missing source table " + tableName + " — run tools/extract_tables.ps1");
                 return 2;
             }
-            Console.WriteLine("TABLE " + tableName + " SRC " + src);
+            Out("TABLE " + tableName + " SRC " + src);
             var asset = Load(src, mappings);
             var table = asset.Exports.OfType<DataTableExport>().FirstOrDefault();
             if (table == null)
             {
-                Console.Error.WriteLine("No DataTableExport in " + src);
+                Out("No DataTableExport in " + src);
                 return 2;
             }
             foreach (var (path, spec) in group)
             {
-                Console.WriteLine("ITEM " + path);
+                Out("ITEM " + path);
                 var applied = ApplyItem(asset, table, spec);
                 if (applied != 0)
                     return applied;
             }
             var dst = Path.Combine(patchedDir, tableName + ".uasset");
             asset.Write(dst);
-            Console.WriteLine("WROTE " + dst + " rows=" + table.Table.Data.Count);
+            Out("WROTE " + dst + " rows=" + table.Table.Data.Count);
         }
         return 0;
     }
@@ -157,6 +212,51 @@ public static class Program
         mappings == null
             ? new UAsset(src, EngineVersion.VER_UE5_4)
             : new UAsset(src, EngineVersion.VER_UE5_4, mappings);
+
+    static bool ReadyToPatch(string repo, ItemSpec spec)
+    {
+        foreach (var path in MeshGamePaths(spec))
+        {
+            if (string.IsNullOrWhiteSpace(path) || !path.StartsWith("/Game/", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var rel = path["/Game/".Length..].Replace('/', Path.DirectorySeparatorChar) + ".uasset";
+            var cooked = Path.Combine(repo, "ue", "RollerSkate", "Saved", "Cooked", "Windows", "RollerSkate", "Content", rel);
+            if (File.Exists(cooked) && File.Exists(Path.ChangeExtension(cooked, ".uexp")))
+                continue;
+            var found = false;
+            var workshop = Path.Combine(repo, "dumps", "workshop");
+            if (Directory.Exists(workshop))
+            {
+                var name = Path.GetFileName(rel);
+                foreach (var hit in Directory.GetFiles(workshop, name, SearchOption.AllDirectories))
+                {
+                    if (new FileInfo(hit).Length > 512 * 1024) continue;
+                    if (File.Exists(Path.ChangeExtension(hit, ".uexp")))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (!found) return false;
+        }
+        return true;
+    }
+
+    static IEnumerable<string> MeshGamePaths(ItemSpec spec)
+    {
+        foreach (var path in new[] { spec.UpperMale, spec.LowerMale })
+        {
+            if (!string.IsNullOrWhiteSpace(path)) yield return path;
+        }
+        spec.Normalize();
+        foreach (var kv in spec.Refs)
+        {
+            if (kv.Key.Contains("Mesh", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(kv.Value))
+                yield return kv.Value;
+        }
+    }
 
     private static string? FindTable(string repo, string tableName)
     {
@@ -176,8 +276,8 @@ public static class Program
             || r.Name.ToString().Contains(spec.CloneRow, StringComparison.OrdinalIgnoreCase));
         if (cloneFrom == null)
         {
-            Console.Error.WriteLine("missing clone row " + spec.CloneRow);
-            return 3;
+            Out("SKIP " + spec.Row + " (no clone row " + spec.CloneRow + ")");
+            return 0;
         }
 
         var clone = (StructPropertyData)cloneFrom.Clone();
@@ -238,12 +338,14 @@ public static class Program
                table.Table.Data[insertAt].Name.ToString().EndsWith("-mod", StringComparison.OrdinalIgnoreCase))
             insertAt++;
         table.Table.Data.Insert(insertAt, clone);
-        Console.WriteLine("ROW " + spec.Row + " table=" + spec.Table + " index=" + insertAt);
+        Out("ROW " + spec.Row + " table=" + spec.Table + " index=" + insertAt);
         return 0;
     }
 
     private static string GuessClass(string key)
     {
+        if (key.Equals("SkatesMesh", StringComparison.OrdinalIgnoreCase))
+            return "SkeletalMesh";
         if (key.Contains("Mesh", StringComparison.OrdinalIgnoreCase) &&
             (key.Contains("Hat", StringComparison.OrdinalIgnoreCase) ||
              key.Contains("Glasses", StringComparison.OrdinalIgnoreCase) ||
@@ -321,7 +423,7 @@ public static class Program
             vp.SetValue(inner, val);
     }
 
-    private static int ListRows(UAsset asset)
+    private static int ListRows(UAsset asset, bool dumpProps = false)
     {
         var table = asset.Exports.OfType<DataTableExport>().FirstOrDefault();
         if (table == null)
@@ -331,6 +433,7 @@ public static class Program
         }
 
         Console.WriteLine("Rows " + table.Table.Data.Count);
+        var dumped = false;
         foreach (var row in table.Table.Data)
         {
             string price = "-", name = "-", extra = "";
@@ -343,12 +446,21 @@ public static class Program
                     name = tp.CultureInvariantString?.ToString() ?? "";
             }
             Console.WriteLine($"{row.Name}\tprice={price}\tname={name}{extra}");
+            if (dumpProps && !dumped && !row.Name.ToString().EndsWith("-mod", StringComparison.OrdinalIgnoreCase))
+            {
+                dumped = true;
+                foreach (var prop in row.Value)
+                {
+                    var hint = prop is ObjectPropertyData obj ? " -> " + obj.Value : "";
+                    Console.WriteLine("  PROP " + prop.GetType().Name + " " + prop.Name + hint);
+                }
+            }
         }
         return 0;
     }
 }
 
-internal sealed class ItemSpec
+public sealed class ItemSpec
 {
     public bool Sample { get; set; }
     public string Table { get; set; } = "DT-upper";
@@ -386,5 +498,15 @@ internal sealed class ItemSpec
         Add("EyeAlbedo", EyeAlbedo);
         if (string.IsNullOrWhiteSpace(Table))
             Table = "DT-upper";
+    }
+
+    public IEnumerable<string> AssetPaths()
+    {
+        Normalize();
+        foreach (var value in Refs.Values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                yield return value;
+        }
     }
 }

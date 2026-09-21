@@ -21,10 +21,8 @@ Write-Host "Local only -> $OutDir  (gitignored, do not upload)"
 
 $proj = Join-Path $tools "RolloutExtractor\RolloutExtractor.csproj"
 $exe = Join-Path $tools "RolloutExtractor\bin\Release\net8.0\RolloutExtractor.exe"
-if (-not (Test-Path $exe)) {
-    dotnet build $proj -c Release
-    if ($LASTEXITCODE -ne 0) { throw "RolloutExtractor build failed" }
-}
+dotnet build $proj -c Release
+if ($LASTEXITCODE -ne 0) { throw "RolloutExtractor build failed" }
 
 $usmap = Join-Path $repo "dumps\mappings.usmap"
 $invoke = @("--game", $game, "--out", $OutDir)

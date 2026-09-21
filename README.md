@@ -2,7 +2,7 @@
 
 Add clothes to the **[Rollout Inline](https://store.steampowered.com/app/4464990/)** customization menus. This is an unofficial fan kit. It does not replace the game’s files with ripped meshes.
 
-You do not run PowerShell by hand. You open one app, click **Setup**, then **Pack and Play**.
+You do not run PowerShell by hand. You open one app. The green **Next** card is the click to do.
 
 ## Install
 
@@ -19,34 +19,37 @@ That is the whole install. Optional later:
 
 ## Use
 
-The How-to panel on the right of the app tells you the next click. In short:
+The How-to panel on the right has one green **Next** card. Hover a button only if you want that button explained.
 
-1. **Setup** (once). Finds the game and copies the clothing menus. The button greys out when it is done.
-2. **Pack and Play**. Writes the two example items into the game and launches Steam: **Baggy T-Shirt** and **Rowe Jeans**.
-3. **Clothing** when you want to make your own.
+1. **Setup** (once). Finds the game and copies the clothing menus.
+2. **Play**. Writes the baggy tee and Rowe jeans into the game.
+3. **Clothing**, **Skates**, or **Gallery** when you want to make or subscribe.
 
 | I want to… | Clicks | Also need |
 |---|---|---|
-| See the examples in-game | Setup → Pack and Play | Steam game |
-| Change a color | Clothing → Color tints → Add this color to the game → Pack and Play | — |
-| Paint a texture | Clothing → Get clothes from my game → Make a paint mod → edit the PNG → Pack and Play | Unreal 5.4.4 |
-| Make a new shape | Clothing → Create a garment → model in Blender → Export this mesh → Cook → Pack and Play | Blender 5.1 + Unreal 5.4.4 |
+| See the examples in-game | Setup → Play | Steam game |
+| Wear a community mod | Gallery → Subscribe → Play | Steam game |
+| Share a mod | Cook it, Gallery → Submit this item (opens a GitHub PR) | Unreal 5.4.4 + GitHub |
+| Paint a texture | Clothing → Get from game → Make a paint mod → edit PNG → Cook → Play | Unreal 5.4.4 |
+| Make a new shape | Clothing → New mesh → Blender → Export → Cook → Play | Blender 5.1 + Unreal 5.4.4 |
+| Change skates | **Skates** → Get skate models → paint wheels, or copy a frame/boot mesh → Cook → Play | Unreal 5.4.4 (Blender if you change the shape) |
 
 The gray bones in Blender are the real game skeleton. There is no hoodie until you model one.
 
-Color examples like Navy Hoodie stay on disk as templates. They do not fill the catalog unless you add them.
+Color examples like Navy Hoodie stay on disk as samples. They are not packed. Paint a PNG instead.
 
 ## Buttons
 
 | Button | What it does |
 |---|---|
 | **Setup** | One-time. Find the game, download retoc, copy clothing menus. |
-| **Clothing** | Workshop: paint, tint, or start a new mesh. |
-| **Cook** | Unreal prepares a PNG or mesh. Does not launch the game. |
-| **Pack and Play** | Write your items into the game and launch. |
-| **Mesh to game** | After you modeled: export + cook + pack + launch. |
+| **Clothing** | Paint a PNG or start a new clothing mesh. |
+| **Skates** | Boots, frames, wheels. Wheels are a paint. |
+| **Gallery** | Subscribe, then Play. Submit is a GitHub PR. |
+| **Cook** | Unreal prepares a PNG or mesh. Does not launch. |
+| **Play** | Merge local + subscribed mods, write the overlay, launch. |
 
-If a button is grey, hover it. The How-to panel says what to install.
+Hover a toolbar button for that button only. The log is job output, not instructions.
 
 ## What this repo ships
 
@@ -56,6 +59,10 @@ If a button is grey, hover it. The How-to panel says what to install.
 - Color-tint templates under `items/` (`"sample": true` — not packed)
 
 It does **not** ship the game, Unreal, Blender, retoc, or ripped clothes. **Clothing → Get clothes from my game** copies those from your Steam install onto this PC only. Do not commit or upload `dumps/`.
+
+Shared mods live in **[xrowex/RoweMod-Gallery](https://github.com/xrowex/RoweMod-Gallery)**. Submit opens a PR. Players only need RoweMod and the Steam game — no Unreal to wear a subscribed mod. Do not upload ripped meshes.
+
+Live speed and feel options are a **separate** repo (UE4SS, not the clothing overlay): **[xrowex/RoweMod-Gameplay](https://github.com/xrowex/RoweMod-Gameplay)**.
 
 ## Advanced
 

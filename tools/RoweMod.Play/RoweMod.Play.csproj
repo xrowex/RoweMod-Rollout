@@ -6,14 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <AssemblyName>RoweMod</AssemblyName>
-    <RootNamespace>RoweMod.App</RootNamespace>
-    <Product>RoweMod</Product>
-    <Description>Few-click setup and ship for RoweMod × Rollout clothing overlays.</Description>
+    <AssemblyName>RoweMod.Play</AssemblyName>
+    <RootNamespace>RoweMod.Play</RootNamespace>
+    <Product>RoweMod Play</Product>
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\DtPatcher\DtPatcher.csproj" />
     <ProjectReference Include="..\RoweMod.Core\RoweMod.Core.csproj" />
+    <ProjectReference Include="..\DtPatcher\DtPatcher.csproj" />
   </ItemGroup>
 </Project>
