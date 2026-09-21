@@ -114,7 +114,8 @@ sealed class MainForm : Form
         _tips.SetToolTip(_ship, "After you modeled: export, cook, pack, launch.");
 
         RefreshChrome();
-        Log("RoweMod.exe  ·  Clothing is the workshop. Pack and Play writes only items you actually made.");
+        Log("Installed. How to on the right is the next click.");
+        Log("Setup once, then Pack and Play to see the baggy tee and Rowe jeans.");
         Log("Repo " + _toolsState.Repo);
     }
 

@@ -49,19 +49,19 @@ sealed class HowToGuide : Panel
         stack.Controls.Add(Eyebrow("THREE WAYS TO ADD CLOTHES", Color.FromArgb(160, 170, 180)));
         stack.Controls.Add(Space(6));
         stack.Controls.Add(PathCard(
-            "1  Tint",
+            "1  Tint a color",
             Color.FromArgb(255, 220, 100),
-            "No Blender. Clothing → Color tints → Add this color to the game → Pack and Play."));
+            "No extra apps. Clothing → Color tints → Add this color to the game → Pack and Play."));
         stack.Controls.Add(Space(6));
         stack.Controls.Add(PathCard(
-            "2  Paint",
+            "2  Paint a texture",
             Color.FromArgb(255, 170, 120),
-            "Unreal 5.4.4. Clothing → Get clothes → Make a paint mod → edit the PNG → Pack and Play."));
+            "Needs Unreal 5.4.4. Clothing → Get clothes from my game → Make a paint mod → edit the PNG → Pack and Play."));
         stack.Controls.Add(Space(6));
         stack.Controls.Add(PathCard(
-            "3  New mesh",
+            "3  Make a new shape",
             Color.FromArgb(140, 190, 255),
-            "Blender + Unreal. Clothing → Create a garment. Gray bones are the real rig. Model clothes, Export, Cook, Pack and Play."));
+            "Needs Blender 5.1 and Unreal 5.4.4. Clothing → Create a garment. Gray bones are the real rig. Model clothes, Export, Cook, Pack and Play."));
         stack.Controls.Add(Space(14));
         stack.Controls.Add(RepoLink());
 
@@ -105,7 +105,7 @@ sealed class HowToGuide : Panel
             "setup" when setupDone =>
                 "Finished. The green chip means the clothing menus are on this PC.\n\nYou do not need to click this again.",
             "setup" =>
-                "One-time. Finds the Steam game and copies the clothing menus into this folder.\n\nNo Blender or Unreal needed.",
+                "First click after install. Finds Rollout on Steam and copies the clothing menus into this folder.\n\nNo Blender or Unreal needed.",
             "clothing" =>
                 "Open this to paint, tint, or make a new shape.\n\nNew mesh opens Blender on the real game skeleton (gray bones, no clothes). Export only after you modeled a garment.",
             "cook" =>
@@ -123,7 +123,7 @@ sealed class HowToGuide : Panel
     void ShowOverview()
     {
         _hoverTitle.Text = "Hover a button above";
-        _hoverBody.Text = "Each button is one step. Clothing is where you pick paint vs a new shape.";
+        _hoverBody.Text = "You already installed. Setup once, Pack and Play to see the examples, then Clothing to make your own.";
     }
 
     void UpdateNext(DetectedTools t)
@@ -135,27 +135,33 @@ sealed class HowToGuide : Panel
             _nextBody.Text = "Install Rollout Inline on Steam, then click Setup. Or browse to RollerSkate → Content → Paks.";
             return;
         }
+        if (!t.HasDotnet)
+        {
+            _nextTitle.Text = "Install .NET 8";
+            _nextBody.Text = "The app needs the .NET 8 SDK. Download it from Microsoft, then open RoweMod.cmd again.";
+            return;
+        }
         if (!t.HasRetoc)
         {
             _nextTitle.Text = "Click Setup";
-            _nextBody.Text = "One time. After this, the Setup button greys out.";
+            _nextBody.Text = "One time. Finds the game and copies the clothing menus. The button greys out when it is done.";
+            return;
+        }
+        if (t.OverlayUtoc is null)
+        {
+            _nextTitle.Text = "Click Pack and Play";
+            _nextBody.Text = "Puts the baggy tee and Rowe jeans in the game, then launches Rollout. That is the first test that install worked.";
             return;
         }
         var wip = ClothingLibrary.Scan(t.Repo).FirstOrDefault(p => p.IsEmptyRig);
         if (wip != null)
         {
-            _nextTitle.Text = "Model " + wip.Title;
-            _nextBody.Text = "Clothing → Open in Blender. Gray bones are the real rig. Add a clothing mesh, weight-paint, save, then Export this mesh.";
-            return;
-        }
-        if (t.OverlayUtoc is null)
-        {
-            _nextTitle.Text = "Pack and Play once";
-            _nextBody.Text = "Puts jeans and the baggy tee in the game, and drops the old dummy catalog rows.";
+            _nextTitle.Text = "Or model " + wip.Title;
+            _nextBody.Text = "Optional. Clothing → Open in Blender. Gray bones are the real rig. Add a clothing mesh, then Export this mesh.";
             return;
         }
         _nextTitle.Text = "Open Clothing";
-        _nextBody.Text = "Paint a texture, add one color tint, or create a garment. Pack and Play writes only what you actually made.";
+        _nextBody.Text = "Paint a texture, add a color tint, or create a garment. Pack and Play writes only what you made.";
     }
 
     void WrapAll()

@@ -1,76 +1,66 @@
 # RoweMod × Rollout
 
-Open clothing-modding kit for **[Rollout Inline](https://store.steampowered.com/app/4464990/)** (UE 5.4.4). Add items to the live customization menus instead of replacing meshes.
+Add clothes to the **[Rollout Inline](https://store.steampowered.com/app/4464990/)** customization menus. This is an unofficial fan kit. It does not replace the game’s files with ripped meshes.
 
-This repository does **not** ship ripped game assets, Unreal, Blender, or retoc binaries. You need the Steam game; Track B also needs Blender and Unreal.
+You do not run PowerShell by hand. You open one app, click **Setup**, then **Pack and Play**.
 
-## First run
+## Install
 
-The app is a real **Windows exe** (`dist\RoweMod.exe`, .NET 8 WinForms). `RoweMod.cmd` only starts that exe (or `dotnet run` if you have not published yet). The `.ps1` files are internals the exe calls. You do not run those by hand.
+Windows only. You need a Steam copy of Rollout Inline.
 
-1. Install the [.NET 8 SDK](https://dotnet.microsoft.com/download).
-2. Clone [xrowex/RoweMod-Rollout](https://github.com/xrowex/RoweMod-Rollout).
-3. Double-click `RoweMod.cmd`, or publish once:
+1. Install the **[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)** (the SDK, not only the runtime).
+2. Get this repo: **Code → Download ZIP** and unzip it, or `git clone https://github.com/xrowex/RoweMod-Rollout.git`.
+3. Double-click **`RoweMod.cmd`**. The first launch may take a minute while it builds.
 
-   ```powershell
-   .\tools\publish_rowemod.ps1
-   ```
+That is the whole install. Optional later:
 
-   Then double-click `dist\RoweMod.exe`.
-4. Click **Setup** once. It finds the Steam game, downloads retoc, and extracts DataTables. After that the button greys out and a green **Setup complete** chip stays on.
-5. **Pack and Play** once to write only live items (painted jeans + baggy tee). Dummy navy/rowe slot clones stay on disk as templates.
-6. **Clothing** → pull from your Steam copy to paint, add one template tint, or start a new mesh.
+- **[Blender 5.1](https://www.blender.org/download/)** if you want a new shape
+- **Unreal Engine 5.4.4** if you want to paint a texture or cook a new mesh
 
-| Button | What it does | Needs |
+## Use
+
+The How-to panel on the right of the app tells you the next click. In short:
+
+1. **Setup** (once). Finds the game and copies the clothing menus. The button greys out when it is done.
+2. **Pack and Play**. Writes the two example items into the game and launches Steam: **Baggy T-Shirt** and **Rowe Jeans**.
+3. **Clothing** when you want to make your own.
+
+| I want to… | Clicks | Also need |
 |---|---|---|
-| **Setup** | retoc + extract tables | .NET 8 + Steam game |
-| **Clothing** | Workshop: paint, new mesh, or kit templates | Steam game; Blender 5.1 to open/export |
-| **Cook** | Unreal import + Windows cook (no overlay write) | UE **5.4.4** |
-| **Pack and Play** | patch live items, write IoStore overlay, launch `steam://run/4464990` | Setup already run |
-| **Mesh to game** | Export last garment → Cook → Pack and Play | all of the above |
+| See the examples in-game | Setup → Pack and Play | Steam game |
+| Change a color | Clothing → Color tints → Add this color to the game → Pack and Play | — |
+| Paint a texture | Clothing → Get clothes from my game → Make a paint mod → edit the PNG → Pack and Play | Unreal 5.4.4 |
+| Make a new shape | Clothing → Create a garment → model in Blender → Export this mesh → Cook → Pack and Play | Blender 5.1 + Unreal 5.4.4 |
 
-Missing tools disable the related button and the status strip says what to install.
+The gray bones in Blender are the real game skeleton. There is no hoodie until you model one.
 
-## Two tracks
+Color examples like Navy Hoodie stay on disk as templates. They do not fill the catalog unless you add them.
 
-| Track | When | What you author | Tools |
-|---|---|---|---|
-| **A — tint** | Same shape, new color | Edit `items/*.json`, Pack and Play | Game + .NET 8 |
-| **A+ — paint** | Same shape, new texture | Pull a map, Make a paint mod, edit the PNG, Pack and Play | Track A + **UE 5.4.4** |
-| **B — new mesh** | New silhouette | Garment on `main-rig`, Export, Cook, Pack and Play | Track A + **Blender 5.1** + **UE 5.4.4** |
+## Buttons
 
-Live packed items are the baggy tee (new mesh) and Rowe jeans (painted albedo). Every other slot JSON is a **template** (`"sample": true`) and is not written into the catalog unless you click **Add this tint to the game**.
+| Button | What it does |
+|---|---|
+| **Setup** | One-time. Find the game, download retoc, copy clothing menus. |
+| **Clothing** | Workshop: paint, tint, or start a new mesh. |
+| **Cook** | Unreal prepares a PNG or mesh. Does not launch the game. |
+| **Pack and Play** | Write your items into the game and launch. |
+| **Mesh to game** | After you modeled: export + cook + pack + launch. |
 
-## Examples
+If a button is grey, hover it. The How-to panel says what to install.
 
-| Slot | Table | File | Kind |
-|---|---|---|---|
-| Tops | `DT-upper` | `items/upper/tshirt-baggy-mod.json` | Live new mesh |
-| Bottoms | `DT-lower` | `items/lower/oversized-jeans-mod.json` | Live paint |
-| Other slots | `DT-*` | `items/<slot>/*-mod.json` with `"sample": true` | Templates only |
+## What this repo ships
 
-JSON fields: `table`, `cloneRow`, `row` (must end in `-mod` to sort first), `localizedName`, `price`, `colour`, `colours` (boot Shell/Sole/Laces/…), `refs` / `upperMale` / `albedo` / `previewImage`.
+- The RoweMod app (`RoweMod.cmd` / `tools/RoweMod.App`)
+- The shared skeleton (`art/rig/main-rig.blend`)
+- Two live examples: baggy tee (new mesh) and Rowe jeans (paint)
+- Color-tint templates under `items/` (`"sample": true` — not packed)
 
-## Track B — new mesh
+It does **not** ship the game, Unreal, Blender, retoc, or ripped clothes. **Clothing → Get clothes from my game** copies those from your Steam install onto this PC only. Do not commit or upload `dumps/`.
 
-Shared skeleton: `/Game/MainFolder/Character/body/main-rig/main-rig` (87 UE5-mannequin bones). Rig kit: `art/rig/main-rig.blend` (armature only; rebuilt from `art/rig/main-rig.fbx`).
+## Advanced
 
-1. **Clothing → New mesh** copies `art/rig/main-rig.blend` and writes the item JSON.
-2. Model on deform bones only (not `ik_*`). Pull clothing first so Export can use the hoodie bind pose.
-3. **Export this mesh**, then **Cook**, then **Pack and Play**. Do not pack `main-rig` or `MI-Upper`.
-
-Details: [docs/modding.md](docs/modding.md). Catalog: [docs/clothing-catalog.md](docs/clothing-catalog.md).
-
-## What gets packed
-
-`RollerSkate-Windows_P.utoc/.ucas` in `RollerSkate/Content/Paks` and `Paks/~mods`. `ClothingMod_P.pak` is written only if UnrealPak is installed. Overlay packages only load if the game already hard-references them from a patched DataTable.
+Item JSON and packing details: [items/README.md](items/README.md), [docs/modding.md](docs/modding.md), [docs/clothing-catalog.md](docs/clothing-catalog.md).
 
 ## Legal
 
-MIT for the tools and original RoweMod art. **Rollout Inline** content belongs to its owners. Pull clothing only from a Steam copy you own. Do not commit, upload, or redistribute extracted meshes, textures, or `.uasset` dumps. This is an unofficial fan project.
-
-## Requirements
-
-- Windows, Steam copy of Rollout Inline
-- .NET 8 SDK (launcher + DtPatcher)
-- Track B: Blender **5.1** and Unreal Engine **5.4.4**
+MIT for the tools and original RoweMod art. Rollout Inline belongs to its owners. Pull clothes only from a Steam copy you own. Unofficial fan project.
