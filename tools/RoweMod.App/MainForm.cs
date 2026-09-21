@@ -7,10 +7,8 @@ namespace RoweMod.App;
 sealed class MainForm : Form
 {
     readonly Button _setup = MakeButton("Setup");
-    readonly Button _export = MakeButton("Clothing");
-    readonly Button _skates = MakeButton("Skates");
+    readonly Button _create = MakeButton("Create");
     readonly Button _gallery = MakeButton("Gallery");
-    readonly Button _cook = MakeButton("Cook");
     readonly Button _pack = MakeButton("Play");
     ClothingPiece? _exportTarget;
     readonly FlowLayoutPanel _steps = new();
@@ -29,7 +27,9 @@ sealed class MainForm : Form
     public IReadOnlyList<string> Toolbar => new[]
     {
         _setup.Text.StartsWith("Setup", StringComparison.Ordinal) ? "Setup" : _setup.Text,
-        _export.Text, _skates.Text, _gallery.Text, _cook.Text, _pack.Text,
+        "Create",
+        "Gallery",
+        "Play",
     };
 
     public MainForm()
@@ -48,17 +48,15 @@ sealed class MainForm : Form
         {
             Dock = DockStyle.Top,
             Height = 64,
-            ColumnCount = 6,
+            ColumnCount = 4,
             Padding = new Padding(10, 10, 10, 4),
         };
-        for (var i = 0; i < 6; i++)
-            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.66f));
+        for (var i = 0; i < 4; i++)
+            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
         buttons.Controls.Add(_setup, 0, 0);
-        buttons.Controls.Add(_export, 1, 0);
-        buttons.Controls.Add(_skates, 2, 0);
-        buttons.Controls.Add(_gallery, 3, 0);
-        buttons.Controls.Add(_cook, 4, 0);
-        buttons.Controls.Add(_pack, 5, 0);
+        buttons.Controls.Add(_create, 1, 0);
+        buttons.Controls.Add(_gallery, 2, 0);
+        buttons.Controls.Add(_pack, 3, 0);
         foreach (Control c in buttons.Controls)
             c.Dock = DockStyle.Fill;
 
@@ -109,17 +107,13 @@ sealed class MainForm : Form
         _status.SendToBack();
 
         _setup.Click += async (_, _) => await RunJob("Setup", SetupAsync);
-        _export.Click += async (_, _) => await OpenExportWorkshop(WorkshopDomain.Clothing);
-        _skates.Click += async (_, _) => await OpenExportWorkshop(WorkshopDomain.Skates);
+        _create.Click += async (_, _) => await OpenCreateWorkshop();
         _gallery.Click += (_, _) => OpenGallery();
-        _cook.Click += async (_, _) => await RunJob("Cook", () => CookAsync());
         _pack.Click += async (_, _) => await RunJob("Play", PackAndPlayAsync);
 
         WireHover(_setup, "setup");
-        WireHover(_export, "clothing");
-        WireHover(_skates, "skates");
+        WireHover(_create, "create");
         WireHover(_gallery, "gallery");
-        WireHover(_cook, "cook");
         WireHover(_pack, "pack");
 
         RefreshChrome();
@@ -163,8 +157,6 @@ sealed class MainForm : Form
                 await RunJob("Setup", SetupAsync);
                 break;
             case UiCopy.NextAction.Cook:
-                await RunJob("Cook", () => CookAsync());
-                break;
             case UiCopy.NextAction.Play:
                 await RunJob("Play", PackAndPlayAsync);
                 break;
@@ -348,18 +340,25 @@ sealed class MainForm : Form
         RefreshChrome();
     }
 
-    async Task OpenExportWorkshop(WorkshopDomain domain)
+    async Task OpenCreateWorkshop()
     {
-        using var dlg = new ExportWorkshopForm(_toolsState, domain);
+        using var dlg = new ExportWorkshopForm(_toolsState, WorkshopDomain.Clothing);
         var result = dlg.ShowDialog(this);
         _toolsState = ToolPaths.Detect();
         RefreshChrome();
         if (dlg.SavedCookTarget)
             Log("Cook target saved.");
-        if (result != DialogResult.OK || !dlg.ExportMesh)
+        if (result == DialogResult.OK && dlg.ExportMesh)
+        {
+            _exportTarget = dlg.ExportTarget;
+            await RunJob("Export", ExportMeshAsync);
+            _toolsState = ToolPaths.Detect();
+            if (dlg.LaunchPlay)
+                await RunJob("Play", PackAndPlayAsync);
             return;
-        _exportTarget = dlg.ExportTarget;
-        await RunJob("Export", ExportMeshAsync);
+        }
+        if (dlg.LaunchPlay)
+            await RunJob("Play", PackAndPlayAsync);
     }
 
     async Task ExportMeshAsync()
@@ -397,12 +396,13 @@ sealed class MainForm : Form
 
     async Task PackAndPlayAsync()
     {
-        if (TextureMods.NeedsCook(_toolsState.Repo))
+        if (UiCopy.CookPending(_toolsState))
         {
             if (_toolsState.UnrealEditor is null)
-                throw new InvalidOperationException("Painted textures need Unreal 5.4.4 to Cook before Play.");
-            Log("Paint is newer than the last cook. Cooking first...");
+                throw new InvalidOperationException("A paint or shape is waiting. Install Unreal 5.4.4, then Play again.");
+            Log("Cooking first...");
             await CookAsync(packing: true);
+            _toolsState = ToolPaths.Detect();
         }
 
         foreach (var p in Process.GetProcessesByName("RollerSkate"))
@@ -490,21 +490,16 @@ sealed class MainForm : Form
         _nextToolbarId = next.Action switch
         {
             UiCopy.NextAction.Setup => "setup",
-            UiCopy.NextAction.Cook or UiCopy.NextAction.BrowseUnreal => "cook",
-            UiCopy.NextAction.Play => "pack",
+            UiCopy.NextAction.Play or UiCopy.NextAction.Cook => "pack",
             _ => "",
         };
 
         _setup.Enabled = !_busy && !setupDone;
         StyleToolbarButton(_setup, setupDone ? "done" : (_nextToolbarId == "setup" ? "next" : "normal"), setupDone);
-        StyleToolbarButton(_export, "normal", false);
-        StyleToolbarButton(_skates, "normal", false);
-        StyleToolbarButton(_gallery, "normal", false);
-        _export.Enabled = !_busy;
-        _skates.Enabled = !_busy;
+        _create.Enabled = !_busy;
+        StyleToolbarButton(_create, "normal", false);
         _gallery.Enabled = !_busy;
-        _cook.Enabled = !_busy && t.UnrealEditor != null;
-        StyleToolbarButton(_cook, _nextToolbarId == "cook" ? "next" : "normal", false);
+        StyleToolbarButton(_gallery, "normal", false);
         _pack.Enabled = !_busy && t.GamePaks != null && t.HasRetoc && t.HasDotnet;
         StyleToolbarButton(_pack, _nextToolbarId == "pack" ? "next" : "normal", false);
 
@@ -607,7 +602,6 @@ sealed class MainForm : Form
             Font = new Font("Segoe UI Semibold", 9.5f),
             Cursor = step.Current && !_busy ? Cursors.Hand : Cursors.Default,
         };
-        // WinForms Label has no Border; use a thin panel wrapper for the current step edge.
         var wrap = new Panel
         {
             AutoSize = true,

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RoweMod — Create tab preview</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1b1e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    padding: 32px 24px 48px;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    color: #f5f5f5;
+  }
+  .label { font-size: 12px; color: #6a727c; align-self: flex-start; margin-left: calc(50% - 590px); }
+  .window {
+    width: 1180px; height: 700px; background: #1c1c20;
+    border: 1px solid #3a3a42; border-radius: 6px; overflow: hidden;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.45); display: flex; flex-direction: column;
+  }
+  .titlebar {
+    height: 32px; background: #252528; border-bottom: 1px solid #333338;
+    display: flex; align-items: center; padding: 0 12px; font-size: 12px; color: #c8c8ce;
+  }
+  .toolbar { height: 64px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px 10px 4px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 15px; border-radius: 2px;
+    border: 1px solid #5a8ca0; background: #2d465a; color: #fff;
+  }
+  .btn.next { background: #388c60; border-color: #8cdcaa; }
+  .btn.done { background: #262e28; border-color: #466e4b; color: #829687; }
+  .steps {
+    height: 48px; background: #181a1e; display: flex; align-items: center; padding: 0 12px;
+  }
+  .step {
+    font-weight: 600; font-size: 13px; padding: 7px 14px;
+    border: 1px solid #464a52; background: #282a30; color: #a0a5af;
+  }
+  .step.done { background: #203428; border-color: #46785a; color: #96d2aa; }
+  .step.current { background: #388c60; border-color: #8cdcaa; color: #fff; }
+  .conn { color: #464a52; margin: 0 8px; font-size: 12px; }
+  .conn.lit { color: #5a8c6e; }
+  .body { flex: 1; display: grid; grid-template-columns: 1fr 420px; min-height: 0; }
+  .log {
+    background: #121214; border-right: 6px solid #303036; padding: 14px 16px;
+    font-family: Consolas, monospace; font-size: 12px; color: #d2e6dc; line-height: 1.55; white-space: pre-wrap;
+  }
+  .howto { background: #16181c; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .howto h2 { font-size: 22px; font-weight: 600; }
+  .card { background: #22342a; padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .eyebrow { font-size: 11px; font-weight: 600; color: #78dcaa; letter-spacing: 0.06em; }
+  .card h3 { font-size: 17px; font-weight: 600; }
+  .card p { font-size: 13px; color: #d2d8de; line-height: 1.4; }
+  .cta {
+    margin-top: 6px; height: 40px; display: flex; align-items: center; justify-content: center;
+    background: #388c60; border: 1px solid #78d2a0; color: #fff; font-weight: 600; font-size: 14px;
+  }
+  .repo { margin-top: auto; color: #8caabe; font-size: 12px; }
+  .status {
+    height: 28px; background: #222226; border-top: 1px solid #333338;
+    display: flex; align-items: center; padding: 0 14px; font-size: 12px; color: #aab4be; gap: 40px;
+  }
+  .workshop {
+    width: 920px; height: 640px; background: #1c1c20; border: 1px solid #3a3a42;
+    border-radius: 6px; overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.45);
+  }
+  .w-banner { padding: 12px 16px 6px; font-size: 14px; color: #d8dee4; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px 12px; }
+  .seg .cell {
+    background: #2d465a; border: 1px solid #5a8ca0; padding: 10px 12px; cursor: default;
+  }
+  .seg .cell.on { background: #3c6450; border-color: #78b48a; }
+  .seg .cell strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .seg .cell span { font-size: 12px; color: #c8d4dc; }
+  .pull {
+    margin: 0 12px 8px; height: 36px; background: #465a32; border: 1px solid #8cb45a;
+    display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px;
+  }
+  .w-list { flex: 1; background: #121214; padding: 12px; color: #a0b0ba; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="label">Main — Ready</div>
+  <div class="window" id="win-main">
+    <div class="titlebar">RoweMod × Rollout</div>
+    <div class="toolbar">
+      <div class="btn done">Setup done</div>
+      <div class="btn">Create</div>
+      <div class="btn">Gallery</div>
+      <div class="btn next">Play</div>
+    </div>
+    <div class="steps">
+      <div class="step done">✓  Game</div>
+      <div class="conn lit">——</div>
+      <div class="step done">✓  Setup</div>
+      <div class="conn lit">——</div>
+      <div class="step done">✓  Play</div>
+    </div>
+    <div class="body">
+      <div class="log">Repo  up to date
+---- Setup ----
+Setup ok
+---- Play ----
+Play ok
+</div>
+      <div class="howto">
+        <h2>How to</h2>
+        <div class="card">
+          <div class="eyebrow">NEXT</div>
+          <h3>Ready</h3>
+          <p>Create or Gallery, then Play.</p>
+        </div>
+        <div class="repo">github.com/xrowex/RoweMod-Rollout</div>
+      </div>
+    </div>
+    <div class="status">
+      <span>Export  —</span>
+      <span>Cook  —</span>
+      <span>In the game</span>
+    </div>
+  </div>
+
+  <div class="label">Create workshop — Clothes / Paint</div>
+  <div class="workshop" id="win-create">
+    <div class="titlebar">Create</div>
+    <div class="w-banner">Paint a texture.</div>
+    <div class="seg">
+      <div class="cell on"><strong>Clothes</strong><span>Tops, bottoms, and more.</span></div>
+      <div class="cell"><strong>Skates</strong><span>Boots, frames, wheels.</span></div>
+    </div>
+    <div class="seg">
+      <div class="cell on"><strong>Paint</strong><span>Edit a texture.</span></div>
+      <div class="cell"><strong>Shape</strong><span>New mesh.</span></div>
+    </div>
+    <div class="pull">Get from game</div>
+    <div class="w-list">Yours<br/><br/>Get from game.</div>
+  </div>
+</body>
+</html>

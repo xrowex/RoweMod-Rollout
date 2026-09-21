@@ -48,14 +48,14 @@ static class FlowPlaytest
                 Application.DoEvents();
                 var bar = string.Join(" | ", main.Toolbar);
                 log.AppendLine("BAR   " + bar);
-                if (main.Toolbar.Count != 6)
-                    Fail("toolbar has " + main.Toolbar.Count + " buttons, expected 6");
+                if (main.Toolbar.Count != 4)
+                    Fail("toolbar has " + main.Toolbar.Count + " buttons, expected 4");
                 else
-                    Ok("6 toolbar buttons");
-                if (bar.Contains("Mesh to game", StringComparison.OrdinalIgnoreCase))
-                    Fail("toolbar still has Mesh to game");
+                    Ok("4 toolbar buttons");
+                if (!bar.Contains("Create", StringComparison.Ordinal) || bar.Contains("Clothing", StringComparison.Ordinal) || bar.Contains("Cook", StringComparison.Ordinal))
+                    Fail("toolbar should be Setup | Create | Gallery | Play, got " + bar);
                 else
-                    Ok("Mesh to game removed");
+                    Ok("Create bar (no Clothing/Cook)");
                 if (!string.Equals(main.HowTo.NextTitle, next.Title, StringComparison.Ordinal))
                     Fail("How-to next '" + main.HowTo.NextTitle + "' != '" + next.Title + "'");
                 else
@@ -74,13 +74,13 @@ static class FlowPlaytest
                 else
                     Ok("hover hidden at idle");
                 Shot(main, Path.Combine(shotDir, "01-main.png"));
-                main.HowTo.ShowButton("clothing");
+                main.HowTo.ShowButton("create");
                 Application.DoEvents();
-                if (!main.HowTo.HoverShown || main.HowTo.HoverTitle != "Clothing")
-                    Fail("hover clothing did not show");
+                if (!main.HowTo.HoverShown || main.HowTo.HoverTitle != "Create")
+                    Fail("hover create did not show");
                 else
-                    Ok("hover clothing");
-                Shot(main, Path.Combine(shotDir, "02-hover-clothing.png"));
+                    Ok("hover create");
+                Shot(main, Path.Combine(shotDir, "02-hover-create.png"));
                 main.HowTo.ShowButton(null);
                 if (main.HowTo.HoverShown)
                     Fail("hover did not hide on leave");
@@ -89,40 +89,41 @@ static class FlowPlaytest
                 main.Hide();
             }
 
-            using (var clothing = new ExportWorkshopForm(t, WorkshopDomain.Clothing))
+            using (var create = new ExportWorkshopForm(t, WorkshopDomain.Clothing))
             {
-                clothing.StartPosition = FormStartPosition.Manual;
-                clothing.Location = new Point(-2000, -2000);
-                clothing.Show();
+                create.StartPosition = FormStartPosition.Manual;
+                create.Location = new Point(-2000, -2000);
+                create.Show();
                 Application.DoEvents();
+                if (create.DomainLabel != "Clothes" || create.TabLabel != "Paint")
+                    Fail("create default '" + create.DomainLabel + "/" + create.TabLabel + "' != Clothes/Paint");
+                else
+                    Ok("create opens Clothes/Paint");
                 var want = UiCopy.WorkshopBanner(WorkshopDomain.Clothing, WorkshopTab.Paint);
-                if (clothing.BannerText != want)
-                    Fail("clothing banner '" + clothing.BannerText + "' != '" + want + "'");
+                if (create.BannerText != want)
+                    Fail("clothes paint banner '" + create.BannerText + "' != '" + want + "'");
                 else
-                    Ok("clothing banner");
-                Shot(clothing, Path.Combine(shotDir, "03-clothing.png"));
-                clothing.ShowTab(WorkshopTab.Mesh);
+                    Ok("clothes paint banner");
+                Shot(create, Path.Combine(shotDir, "03-create-clothes.png"));
+                create.ShowTab(WorkshopTab.Mesh);
                 Application.DoEvents();
-                Shot(clothing, Path.Combine(shotDir, "03-clothing-mesh.png"));
-                clothing.Hide();
-            }
-
-            using (var skatesForm = new ExportWorkshopForm(t, WorkshopDomain.Skates))
-            {
-                skatesForm.StartPosition = FormStartPosition.Manual;
-                skatesForm.Location = new Point(-2000, -2000);
-                skatesForm.Show();
-                Application.DoEvents();
-                var want = UiCopy.WorkshopBanner(WorkshopDomain.Skates, WorkshopTab.Paint);
-                if (skatesForm.BannerText != want)
-                    Fail("skates banner '" + skatesForm.BannerText + "' != '" + want + "'");
+                if (create.TabLabel != "Shape")
+                    Fail("shape tab label '" + create.TabLabel + "'");
                 else
-                    Ok("skates banner");
-                Shot(skatesForm, Path.Combine(shotDir, "04-skates.png"));
-                skatesForm.ShowTab(WorkshopTab.Mesh);
+                    Ok("shape tab");
+                Shot(create, Path.Combine(shotDir, "03-create-shape.png"));
+                create.ShowDomain(WorkshopDomain.Skates);
+                create.ShowTab(WorkshopTab.Paint);
                 Application.DoEvents();
-                Shot(skatesForm, Path.Combine(shotDir, "04-skates-mesh.png"));
-                skatesForm.Hide();
+                if (create.DomainLabel != "Skates")
+                    Fail("skates domain '" + create.DomainLabel + "'");
+                else
+                    Ok("skates domain");
+                Shot(create, Path.Combine(shotDir, "04-create-skates.png"));
+                create.ShowTab(WorkshopTab.Mesh);
+                Application.DoEvents();
+                Shot(create, Path.Combine(shotDir, "04-create-skates-shape.png"));
+                create.Hide();
             }
 
             using (var gallery = new GalleryForm(t))
