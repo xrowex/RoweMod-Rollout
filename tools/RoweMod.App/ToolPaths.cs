@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using RoweMod.Core;
 
 namespace RoweMod.App;
 
@@ -76,31 +76,17 @@ static class ToolPaths
     public static string? FindGamePaks()
     {
         var env = Environment.GetEnvironmentVariable("ROWE_GAME_PAKS");
-        if (!string.IsNullOrWhiteSpace(env) && LooksLikePaks(env))
-            return Path.GetFullPath(env);
+        if (LooksLikePaks(env))
+            return Path.GetFullPath(env!);
 
         var saved = LocalSettings.Load().GamePaks;
-        if (!string.IsNullOrWhiteSpace(saved) && LooksLikePaks(saved))
-            return Path.GetFullPath(saved);
+        if (LooksLikePaks(saved))
+            return Path.GetFullPath(saved!);
 
-        const string rel = @"steamapps\common\RolloutInline\RollerSkate\Content\Paks";
-        foreach (var lib in SteamLibraries())
-        {
-            var paks = Path.Combine(lib, rel);
-            if (LooksLikePaks(paks))
-                return Path.GetFullPath(paks);
-        }
-
-        var fallback = @"C:\Program Files (x86)\Steam\steamapps\common\RolloutInline\RollerSkate\Content\Paks";
-        return LooksLikePaks(fallback) ? Path.GetFullPath(fallback) : null;
+        return SteamLocate.FindRolloutPaks();
     }
 
-    public static bool LooksLikePaks(string? folder)
-    {
-        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return false;
-        return Directory.EnumerateFiles(folder, "*.utoc").Any()
-            || Directory.EnumerateFiles(folder, "*.pak").Any();
-    }
+    public static bool LooksLikePaks(string? folder) => SteamLocate.LooksLikePaks(folder);
 
     public static string? ResolveGamePaksFromFolder(string picked)
     {
@@ -113,7 +99,9 @@ static class ToolPaths
             Path.Combine(root, "Content", "Paks"),
             Path.Combine(root, "RollerSkate", "Content", "Paks"),
             Path.Combine(root, "RolloutInline", "RollerSkate", "Content", "Paks"),
+            Path.Combine(root, "Rollout Inline", "RollerSkate", "Content", "Paks"),
             Path.Combine(root, "steamapps", "common", "RolloutInline", "RollerSkate", "Content", "Paks"),
+            Path.Combine(root, "steamapps", "common", "Rollout Inline", "RollerSkate", "Content", "Paks"),
         })
         {
             if (LooksLikePaks(candidate)) return Path.GetFullPath(candidate);
@@ -123,11 +111,14 @@ static class ToolPaths
         {
             foreach (var dir in Directory.EnumerateDirectories(root, "Paks", SearchOption.AllDirectories))
             {
-                if (dir.Contains("RollerSkate", StringComparison.OrdinalIgnoreCase) && LooksLikePaks(dir))
-                    return Path.GetFullPath(dir);
+                if (LooksLikePaks(dir)) return Path.GetFullPath(dir);
             }
         }
         catch (UnauthorizedAccessException)
+        {
+            // stay with explicit candidates
+        }
+        catch (DirectoryNotFoundException)
         {
             // stay with explicit candidates
         }
@@ -413,75 +404,4 @@ static class ToolPaths
         }
     }
 
-    static IEnumerable<string> SteamLibraries()
-    {
-        var steam = SteamInstall();
-        if (steam == null) yield break;
-        yield return steam;
-        var vdf = Path.Combine(steam, "steamapps", "libraryfolders.vdf");
-        if (!File.Exists(vdf)) yield break;
-        foreach (var line in File.ReadLines(vdf))
-        {
-            var m = Regex.Match(line, "\"path\"\\s+\"([^\"]+)\"");
-            if (!m.Success) continue;
-            var p = m.Groups[1].Value.Replace(@"\\", @"\");
-            if (Directory.Exists(p)) yield return Path.GetFullPath(p);
-        }
-    }
-
-    static string? SteamInstall()
-    {
-        foreach (var path in SteamRegistryPaths())
-        {
-            if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
-                return Path.GetFullPath(path);
-        }
-
-        foreach (var guess in new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Steam"),
-            @"C:\Program Files (x86)\Steam",
-        })
-        {
-            if (File.Exists(Path.Combine(guess, "steam.exe")))
-                return Path.GetFullPath(guess);
-        }
-        return null;
-    }
-
-    static IEnumerable<string> SteamRegistryPaths()
-    {
-        yield return ReadSteamPath(
-            Microsoft.Win32.Registry.CurrentUser,
-            @"Software\Valve\Steam",
-            "SteamPath", "InstallPath");
-        yield return ReadSteamPath(
-            Microsoft.Win32.Registry.LocalMachine,
-            @"SOFTWARE\WOW6432Node\Valve\Steam",
-            "InstallPath", "SteamPath");
-        yield return ReadSteamPath(
-            Microsoft.Win32.Registry.LocalMachine,
-            @"SOFTWARE\Valve\Steam",
-            "InstallPath", "SteamPath");
-    }
-
-    static string ReadSteamPath(Microsoft.Win32.RegistryKey hive, string subkey, params string[] valueNames)
-    {
-        try
-        {
-            using var key = hive.OpenSubKey(subkey);
-            if (key == null) return "";
-            foreach (var name in valueNames)
-            {
-                if (key.GetValue(name) is string path && !string.IsNullOrWhiteSpace(path))
-                    return path.Replace('/', '\\');
-            }
-        }
-        catch
-        {
-            // no steam key
-        }
-        return "";
-    }
 }

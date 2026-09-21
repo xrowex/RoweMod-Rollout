@@ -11,6 +11,7 @@
 | pull_clothing.ps1 | this folder | Extract clothing meshes/textures from your Steam copy into `dumps/game-clothing` |
 | DtPatcher | `DtPatcher/` | Clone a DataTable row from `items/*.json` |
 | find_ue54.ps1 | this folder | Locate UnrealEditor 5.4 (env, settings, Epic launcher, common paths) |
+| Find-RolloutPaks.ps1 | this folder | Locate game Paks via Steam libraries, appmanifest_4464990, fixed drives |
 
 Game paks:
 
