@@ -98,15 +98,17 @@ public static class SteamLocate
 
         foreach (var d in drives)
         {
+            string? root = null;
             try
             {
                 if (!d.IsReady || d.DriveType is not (DriveType.Fixed or DriveType.Removable)) continue;
-                yield return d.RootDirectory.FullName;
+                root = d.RootDirectory.FullName;
             }
             catch
             {
                 // skip locked / optical
             }
+            if (root != null) yield return root;
         }
     }
 

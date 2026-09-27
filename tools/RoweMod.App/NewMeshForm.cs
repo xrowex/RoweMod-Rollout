@@ -15,7 +15,7 @@ sealed class NewMeshForm : Form
         var skate = domain == WorkshopDomain.Skates;
         Text = skate ? "New skate" : "New garment";
         Width = 500;
-        Height = 280;
+        Height = 330;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -28,23 +28,23 @@ sealed class NewMeshForm : Form
         {
             Left = 20,
             Top = 16,
-            Width = 480,
-            Height = 56,
+            Width = 440,
+            Height = 80,
             Text = skate
-                ? "Opens a copy of a game frame or boot. Wheels are Paint."
-                : "Opens the skeleton. Model clothes on it.",
+                ? "Creates a saved Blender project from a frame or boot.\nEdit in Blender → Ctrl+S → Export + Play.\nWheels use Paint."
+                : "Creates a saved Blender project with the game rig.\nModel and weight your garment → Ctrl+S → Export + Play.",
         };
 
-        var nameLab = new Label { Left = 20, Top = 84, Width = 140, Text = "Name" };
+        var nameLab = new Label { Left = 20, Top = 110, Width = 140, Text = "Mod name" };
         _name.Left = 160;
-        _name.Top = 80;
+        _name.Top = 106;
         _name.Width = 300;
-        _name.Text = skate ? "wide frame" : "wide hoodie";
+        _name.PlaceholderText = skate ? "e.g. My frame" : "e.g. My hoodie";
 
-        var slotLab = new Label { Left = 20, Top = 124, Width = 140, Text = "Slot" };
+        var slotLab = new Label { Left = 20, Top = 154, Width = 140, Text = "Slot" };
         _slot.Left = 160;
-        _slot.Top = 120;
-        _slot.Width = 340;
+        _slot.Top = 150;
+        _slot.Width = 300;
         _slot.DropDownStyle = ComboBoxStyle.DropDownList;
         if (skate)
             _slot.Items.AddRange(new object[] { "Frames", "Boots" });
@@ -54,10 +54,10 @@ sealed class NewMeshForm : Form
 
         var ok = new Button
         {
-            Text = "Create",
-            Left = 160,
-            Top = 180,
-            Width = 140,
+            Text = "Create + open Blender",
+            Left = 20,
+            Top = 226,
+            Width = 260,
             Height = 36,
             DialogResult = DialogResult.OK,
             FlatStyle = FlatStyle.Flat,
@@ -70,7 +70,7 @@ sealed class NewMeshForm : Form
         {
             Text = "Cancel",
             Left = 320,
-            Top = 180,
+            Top = 226,
             Width = 120,
             Height = 36,
             DialogResult = DialogResult.Cancel,
@@ -81,6 +81,8 @@ sealed class NewMeshForm : Form
         };
 
         AcceptButton = ok;
+        ok.Enabled = false;
+        _name.TextChanged += (_, _) => ok.Enabled = !string.IsNullOrWhiteSpace(GarmentName);
         CancelButton = cancel;
         Controls.AddRange(new Control[] { hint, nameLab, _name, slotLab, _slot, ok, cancel });
     }

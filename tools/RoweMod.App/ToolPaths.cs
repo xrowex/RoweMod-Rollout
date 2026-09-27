@@ -10,7 +10,6 @@ sealed class DetectedTools
     public string? GamePaks { get; init; }
     public string? Blender { get; init; }
     public string? UnrealEditor { get; init; }
-    public bool HasDotnet { get; init; }
     public bool HasRetoc { get; init; }
     public bool HasPulledClothing { get; init; }
     public string? OverlayUtoc { get; init; }
@@ -63,7 +62,6 @@ static class ToolPaths
             GamePaks = paks,
             Blender = FindBlender51(),
             UnrealEditor = FindUnreal54(),
-            HasDotnet = HasDotnet8(),
             HasRetoc = File.Exists(Path.Combine(repo, "tools", "retoc", "retoc.exe")),
             HasPulledClothing = File.Exists(Path.Combine(repo, "dumps", "game-clothing", "manifest.json")),
             OverlayUtoc = overlay,
@@ -377,30 +375,6 @@ static class ToolPaths
                         yield return exe;
                 }
             }
-        }
-    }
-
-    public static bool HasDotnet8()
-    {
-        try
-        {
-            var psi = new ProcessStartInfo("dotnet", "--list-runtimes")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            using var p = Process.Start(psi);
-            if (p == null) return false;
-            var output = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(4000);
-            return output.Contains("Microsoft.WindowsDesktop.App 8.") ||
-                   output.Contains("Microsoft.NETCore.App 8.");
-        }
-        catch
-        {
-            return false;
         }
     }
 

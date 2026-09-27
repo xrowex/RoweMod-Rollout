@@ -24,6 +24,8 @@ def find_png(row, name):
     if preview.is_file():
         return preview
     folder = TEX / row if row else None
+    if folder and not folder.is_dir() and row.lower().endswith("-mod"):
+        folder = TEX / row[:-4]
     if not folder or not folder.is_dir():
         return None
     want = name.lower()

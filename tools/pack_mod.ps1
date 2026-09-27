@@ -22,7 +22,7 @@ Start-Sleep -Milliseconds 400
 
 if (-not $SkipPatch) {
     Write-Host "Patching all items..."
-    dotnet run --project (Join-Path $PSScriptRoot "DtPatcher\DtPatcher.csproj") -c Release -- --all-items
+    & (Join-Path $PSScriptRoot "patch_items.ps1")
     if ($LASTEXITCODE -ne 0) { throw "DtPatcher failed" }
 }
 
@@ -61,8 +61,9 @@ function Stage-CookedAsset([string]$gamePath) {
     $dstDir = Join-Path $stageContent (Split-Path $rel -Parent)
     New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
     $copied = $false
+    $skateFolder = $gamePath -match '^/Game/MainFolder/Character/skates/[^/]+/([^/]+)/\1$'
     Get-ChildItem $srcDir -File | Where-Object {
-        $_.BaseName -eq $name -and $_.BaseName -notmatch "_Skeleton$" -and $_.BaseName -notmatch "PhysicsAsset"
+        ($skateFolder -or ($_.BaseName -eq $name -and $_.BaseName -notmatch "_Skeleton$" -and $_.BaseName -notmatch "PhysicsAsset")) -and $_.Extension -in '.uasset','.uexp','.ubulk','.uptnl'
     } | ForEach-Object {
         Copy-Item $_.FullName $dstDir -Force
         Write-Host "staged $($_.Name)"

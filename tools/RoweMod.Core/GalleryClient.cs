@@ -36,15 +36,9 @@ public sealed class GalleryClient
     {
         using var http = Http();
         var url = RawRoot + "catalog.json";
-        try
-        {
-            var json = await http.GetStringAsync(url, cancel);
-            return JsonSerializer.Deserialize<CatalogFile>(json, Json) ?? new CatalogFile();
-        }
-        catch (HttpRequestException)
-        {
-            return new CatalogFile();
-        }
+        var json = await http.GetStringAsync(url, cancel);
+        return JsonSerializer.Deserialize<CatalogFile>(json, Json)
+            ?? throw new InvalidOperationException("Gallery returned an invalid catalog.");
     }
 
     public async Task DownloadModAsync(string repo, CatalogEntry entry, Action<string>? log = null, CancellationToken cancel = default)
@@ -116,7 +110,8 @@ public sealed class GalleryClient
             await Task.Delay(2000, cancel);
         }
 
-        var sha = await DefaultBranchSha(http, headRepo, cancel);
+        // An existing fork can be behind. Start submissions from the current gallery.
+        var sha = await DefaultBranchSha(http, DefaultRepo, cancel);
         await CreateBranch(http, headRepo, branch, sha, cancel);
         log?.Invoke("branch " + branch);
 
@@ -230,13 +225,27 @@ public sealed class GalleryClient
 
     static async Task PutFile(HttpClient http, string repo, string branch, string path, byte[] bytes, string message, CancellationToken cancel)
     {
-        var payload = JsonSerializer.Serialize(new
+        var endpoint = "https://api.github.com/repos/" + repo + "/contents/"
+            + string.Join("/", path.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
+        string? existingSha = null;
+        using (var existing = await http.GetAsync(endpoint + "?ref=" + Uri.EscapeDataString(branch), cancel))
         {
-            message,
-            content = Convert.ToBase64String(bytes),
-            branch,
-        });
-        using var req = new HttpRequestMessage(HttpMethod.Put, "https://api.github.com/repos/" + repo + "/contents/" + path.Replace("\\", "/"))
+            if (existing.IsSuccessStatusCode)
+            {
+                using var file = JsonDocument.Parse(await existing.Content.ReadAsStringAsync(cancel));
+                existingSha = file.RootElement.GetProperty("sha").GetString()
+                    ?? throw new InvalidOperationException("Existing gallery file has no SHA: " + path);
+            }
+            else if (existing.StatusCode != System.Net.HttpStatusCode.NotFound)
+                throw new InvalidOperationException("Could not check gallery file " + path + ": " + await existing.Content.ReadAsStringAsync(cancel));
+        }
+        var fields = new Dictionary<string, object>
+        {
+            ["message"] = message, ["content"] = Convert.ToBase64String(bytes), ["branch"] = branch,
+        };
+        if (existingSha != null) fields["sha"] = existingSha;
+        var payload = JsonSerializer.Serialize(fields);
+        using var req = new HttpRequestMessage(HttpMethod.Put, endpoint)
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json"),
         };

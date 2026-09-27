@@ -8,17 +8,6 @@ $repo = (Resolve-Path (Join-Path $tools "..")).Path
 Write-Host "RoweMod setup"
 Write-Host "repo $repo"
 
-$dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
-if (-not $dotnet) {
-    Write-Warning ".NET SDK is not on PATH. RoweMod.exe can still pack in-process. CLI pack_mod.ps1 needs https://dotnet.microsoft.com/download"
-} else {
-    $ver = (& dotnet --version)
-    Write-Host "dotnet $ver"
-    if ($ver -notmatch '^8\.') {
-        Write-Warning "DtPatcher targets net8.0; found $ver. Continue anyway."
-    }
-}
-
 if (-not $GamePaks) {
     $GamePaks = & (Join-Path $tools "Find-RolloutPaks.ps1")
 }

@@ -94,7 +94,6 @@ sealed class MainForm : Form
                 _split.SplitterDistance = Math.Max(220, _split.Width - 460);
             _split.Panel1MinSize = 220;
             _split.Panel2MinSize = 360;
-            TryAutoUpdate();
         };
 
         _status.SizingGrip = false;
@@ -150,9 +149,6 @@ sealed class MainForm : Form
             case UiCopy.NextAction.BrowseUnreal:
                 BrowseUnreal();
                 break;
-            case UiCopy.NextAction.OpenDotnet:
-                OpenDotnetDownload();
-                break;
             case UiCopy.NextAction.Setup:
                 await RunJob("Setup", SetupAsync);
                 break;
@@ -186,6 +182,7 @@ sealed class MainForm : Form
         catch (Exception ex)
         {
             Log("ERROR " + ex.Message);
+            MessageBox.Show(this, ex.Message, "RoweMod", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally
         {
@@ -195,17 +192,9 @@ sealed class MainForm : Form
         }
     }
 
-    static void OpenDotnetDownload()
+    async Task<bool> RunJob(string name, Func<Task> work)
     {
-        Process.Start(new ProcessStartInfo("https://dotnet.microsoft.com/download/dotnet/8.0")
-        {
-            UseShellExecute = true,
-        });
-    }
-
-    async Task RunJob(string name, Func<Task> work)
-    {
-        if (_busy) return;
+        if (_busy) return false;
         _busy = true;
         RefreshChrome();
         Log("---- " + name + " ----");
@@ -213,10 +202,13 @@ sealed class MainForm : Form
         {
             await work();
             Log(name + " ok");
+            return true;
         }
         catch (Exception ex)
         {
             Log("ERROR " + ex.Message);
+            MessageBox.Show(this, ex.Message, name + " failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
         }
         finally
         {
@@ -230,25 +222,6 @@ sealed class MainForm : Form
     {
         button.MouseEnter += (_, _) => _howTo.ShowButton(id);
         button.MouseLeave += (_, _) => _howTo.ShowButton(null);
-    }
-
-    void TryAutoUpdate()
-    {
-        try
-        {
-            var msg = RepoUpdate.TryPull(_toolsState.Repo);
-            if (!string.IsNullOrWhiteSpace(msg))
-                Log("Repo  " + msg);
-            if (msg != null && msg.StartsWith("updated", StringComparison.OrdinalIgnoreCase))
-            {
-                _toolsState = ToolPaths.Detect();
-                RefreshChrome();
-            }
-        }
-        catch (Exception ex)
-        {
-            Log("Repo  update skipped: " + ex.Message);
-        }
     }
 
     void BrowseGame()
@@ -351,9 +324,9 @@ sealed class MainForm : Form
         if (result == DialogResult.OK && dlg.ExportMesh)
         {
             _exportTarget = dlg.ExportTarget;
-            await RunJob("Export", ExportMeshAsync);
+            var exported = await RunJob("Export", ExportMeshAsync);
             _toolsState = ToolPaths.Detect();
-            if (dlg.LaunchPlay)
+            if (exported && dlg.LaunchPlay)
                 await RunJob("Play", PackAndPlayAsync);
             return;
         }
@@ -369,17 +342,20 @@ sealed class MainForm : Form
             ? MeshWork.FromPiece(_toolsState.Repo, _exportTarget)
             : MeshWork.LoadOrDefault(_toolsState.Repo);
         if (string.IsNullOrWhiteSpace(target.Blend) || !File.Exists(target.Blend))
-            throw new InvalidOperationException("No Blender file for this garment yet.");
-        if (string.IsNullOrWhiteSpace(target.BindGlb) || !File.Exists(target.BindGlb))
+            throw new InvalidOperationException("Choose a saved .blend or .fbx file for this mesh first.");
+        var skate = target.ImportKind is "static" or "skeletal-skate";
+        if (!skate && (string.IsNullOrWhiteSpace(target.BindGlb) || !File.Exists(target.BindGlb)))
             throw new InvalidOperationException("Pull clothing first. Export needs the game hoodie bind pose.");
-        MeshWork.SaveTarget(_toolsState.Repo, target);
         Log("Export " + target.MeshName + " from " + target.Blend);
+        var script = skate ? Path.Combine(_toolsState.Repo, "art", "export_skate.py") : _toolsState.ExportScript;
         var code = await RunProcess(
             _toolsState.Blender,
-            "-b --factory-startup -P \"" + _toolsState.ExportScript + "\"",
+            "-b --factory-startup --python-exit-code 1 -P \"" + script + "\"",
             _toolsState.Repo,
             MeshWork.ExportEnv(target));
-        if (code != 0) throw new InvalidOperationException("Export failed (" + code + ")");
+        if (code != 0) throw new InvalidOperationException("Export failed. Save your .blend or re-export your FBX, then check the log for details. Play was not started.");
+        if (!File.Exists(target.Gamebind)) throw new InvalidOperationException("Export produced no mesh. Save your .blend or re-export your FBX and try again.");
+        MeshWork.SaveTarget(_toolsState.Repo, target);
         if (File.Exists(target.Gamebind))
             Log("Export glb " + target.Gamebind + " " + File.GetLastWriteTime(target.Gamebind));
     }
@@ -500,7 +476,7 @@ sealed class MainForm : Form
         StyleToolbarButton(_create, "normal", false);
         _gallery.Enabled = !_busy;
         StyleToolbarButton(_gallery, "normal", false);
-        _pack.Enabled = !_busy && t.GamePaks != null && t.HasRetoc && t.HasDotnet;
+        _pack.Enabled = !_busy && t.GamePaks != null && t.HasRetoc;
         StyleToolbarButton(_pack, _nextToolbarId == "pack" ? "next" : "normal", false);
 
         if (setupDone)

@@ -13,6 +13,8 @@ static class Program
         };
         try
         {
+            if (args.Length == 2 && args[0] == "--check-portable")
+                return PortableChecks.Run(args[1]);
             if (args.Any(a => a.Equals("--check", StringComparison.OrdinalIgnoreCase)))
                 return FlowPlaytest.Run();
 

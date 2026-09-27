@@ -10,6 +10,9 @@ sealed class GalleryForm : Form
     readonly Panel _sharePanel = new();
     readonly ComboBox _submitPick = new();
     readonly TextBox _author = new();
+    readonly Button _submit = new();
+    bool _updating;
+    bool _submitting;
     List<CatalogEntry> _catalog = new();
 
     public GalleryForm(DetectedTools tools)
@@ -32,15 +35,13 @@ sealed class GalleryForm : Form
             Text = UiCopy.GalleryBanner,
         };
 
-        var topBar = new Panel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(12, 6, 12, 6) };
-        var refresh = SmallButton("Refresh", () => _ = LoadCatalogAsync());
-        refresh.Left = 0;
-        refresh.Top = 2;
-        var share = SmallButton("Share…", ToggleShare);
-        share.Left = 110;
-        share.Top = 2;
+        var topBar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(12, 6, 12, 6), WrapContents = false };
+        var refresh = SmallButton("Refresh gallery", () => _ = LoadCatalogAsync());
+        var share = SmallButton("Upload mod…", () => ShowShare(false));
+        var update = SmallButton("Update my mod…", () => ShowShare(true));
         topBar.Controls.Add(refresh);
         topBar.Controls.Add(share);
+        topBar.Controls.Add(update);
 
         _sharePanel.Dock = DockStyle.Top;
         _sharePanel.Height = 0;
@@ -51,11 +52,17 @@ sealed class GalleryForm : Form
         _submitPick.Top = 6;
         _submitPick.Width = 280;
         _submitPick.DropDownStyle = ComboBoxStyle.DropDownList;
+        _submitPick.SelectedIndexChanged += (_, _) =>
+        {
+            if (_updating && _submitPick.SelectedItem is SubmitChoice choice)
+                _author.Text = _catalog.FirstOrDefault(e => e.Id.Equals(choice.Piece.Id,
+                    StringComparison.OrdinalIgnoreCase))?.Author ?? _author.Text;
+        };
         _author.Left = 290;
         _author.Top = 8;
         _author.Width = 160;
         _author.PlaceholderText = "Your name";
-        var submit = SmallButton("Submit", () => _ = SubmitAsync());
+        var submit = _submit = SmallButton("Submit upload", () => _ = SubmitAsync());
         submit.Left = 460;
         submit.Top = 6;
         submit.AutoSize = true;
@@ -87,12 +94,18 @@ sealed class GalleryForm : Form
         Shown += async (_, _) => await LoadCatalogAsync();
     }
 
-    void ToggleShare()
+    void ShowShare(bool updating)
     {
-        var on = !_sharePanel.Visible;
-        _sharePanel.Visible = on;
-        _sharePanel.Height = on ? 48 : 0;
-        if (on) FillSubmitPick();
+        if (_submitting) return;
+        _updating = updating;
+        _sharePanel.Visible = true;
+        _sharePanel.Height = 48;
+        _submit.Text = updating ? "Submit update" : "Submit upload";
+        FillSubmitPick();
+        SetHint(_submitPick.Items.Count == 0
+            ? (updating ? "No local mods match the gallery. Refresh the gallery or upload a new mod first."
+                : "No new local mods. Create and cook one first, or choose Update my mod.")
+            : "Choose your cooked mod. Submission opens a GitHub pull request; it goes live after merge.", true);
     }
 
     void FillSubmitPick()
@@ -100,7 +113,12 @@ sealed class GalleryForm : Form
         _submitPick.Items.Clear();
         foreach (var piece in ClothingLibrary.Scan(_tools.Repo)
                      .Where(p => !p.Sample && !p.FromGame && p.ItemJson != null && p.Kind != ClothingKind.Kit))
+        {
+            var published = _catalog.Any(e => e.Id.Equals(piece.Id, StringComparison.OrdinalIgnoreCase));
+            if (published != _updating) continue;
             _submitPick.Items.Add(new SubmitChoice(piece));
+        }
+        _submit.Enabled = !_submitting && _submitPick.Items.Count > 0;
         if (_submitPick.Items.Count > 0)
             _submitPick.SelectedIndex = 0;
     }
@@ -114,6 +132,7 @@ sealed class GalleryForm : Form
             var file = await client.FetchCatalogAsync();
             _catalog = file.Mods;
             Rebuild();
+            if (!_submitting) FillSubmitPick();
             SetHint(_catalog.Count == 0
                 ? "Catalog is empty."
                 : _catalog.Count + " mod(s).", ok: true);
@@ -149,6 +168,7 @@ sealed class GalleryForm : Form
     Control MakeCard(CatalogEntry entry)
     {
         var on = SubscriptionStore.IsSubscribed(entry.Id);
+        var deleted = DtPatcher.Program.IsLocallyDeleted(_tools.Repo, entry.Row);
         var card = new Panel
         {
             Height = 96,
@@ -169,7 +189,7 @@ sealed class GalleryForm : Form
             Top = 34,
             AutoSize = true,
             ForeColor = Color.FromArgb(180, 200, 210),
-            Text = entry.Slot + "  ·  " + entry.Author + "  ·  " + entry.Row,
+            Text = deleted ? "Deleted on this PC. Restore it in Create → Deleted mods." : entry.Slot + "  ·  " + entry.Author + "  ·  " + entry.Row,
         };
         var buttons = new FlowLayoutPanel
         {
@@ -180,6 +200,7 @@ sealed class GalleryForm : Form
             WrapContents = false,
         };
         var toggle = SmallButton(on ? "Unsubscribe" : "Subscribe", () => _ = ToggleAsync(entry, !on));
+        if (deleted && !on) toggle.Enabled = false;
         if (!on) toggle.BackColor = Color.FromArgb(50, 110, 80);
         buttons.Controls.Add(toggle);
         card.Controls.Add(title);
@@ -216,6 +237,7 @@ sealed class GalleryForm : Form
 
     async Task SubmitAsync()
     {
+        if (_submitting) return;
         if (_submitPick.SelectedItem is not SubmitChoice choice || choice.Piece.ItemJson == null)
         {
             MessageBox.Show(this, "Pick a live item you already cooked.", "Gallery", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -223,6 +245,12 @@ sealed class GalleryForm : Form
         }
         try
         {
+            _submitting = true;
+            _submit.Enabled = false;
+            _submitPick.Enabled = false;
+            _author.Enabled = false;
+            var author = _author.Text;
+            var updating = _updating;
             var token = GitHubAuth.ResolveToken();
             var clientId = Environment.GetEnvironmentVariable("ROWE_GITHUB_CLIENT_ID");
             if (string.IsNullOrWhiteSpace(token) && !string.IsNullOrWhiteSpace(clientId))
@@ -237,17 +265,24 @@ sealed class GalleryForm : Form
 
             var dest = Path.Combine(_tools.Repo, "dumps", "submit", choice.Piece.Id);
             SetHint("Packaging " + choice.Piece.Title + "…", ok: true);
-            await Task.Run(() => ModPackage.Build(_tools.Repo, choice.Piece.ItemJson, _author.Text, dest));
+            await Task.Run(() => ModPackage.Build(_tools.Repo, choice.Piece.ItemJson, author, dest));
             SetHint("Opening pull request…", ok: true);
             var client = new GalleryClient(token);
-            var url = await client.SubmitPrAsync(dest, "Add " + choice.Piece.Title, line => { });
-            SetHint("PR opened. " + url, ok: true);
+            var url = await client.SubmitPrAsync(dest, (updating ? "Update " : "Add ") + choice.Piece.Title, line => { });
+            SetHint("Submitted for review. Goes live after merge: " + url, ok: true);
             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { /* ignore */ }
         }
         catch (Exception ex)
         {
             SetHint(ex.Message, ok: false);
             MessageBox.Show(this, ex.Message, "Submit", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _submitting = false;
+            _submit.Enabled = _submitPick.Items.Count > 0;
+            _submitPick.Enabled = true;
+            _author.Enabled = true;
         }
     }
 
@@ -273,7 +308,7 @@ sealed class GalleryForm : Form
             Height = 56,
             Text = "Paste a GitHub token with public_repo (or sign in with gh auth login). Device flow needs an OAuth app client id.",
         };
-        var box = new TextBox { Left = 16, Top = 80, Width = 470 };
+        var box = new TextBox { Left = 16, Top = 80, Width = 470, UseSystemPasswordChar = true };
         var ok = new Button { Text = "Save token", Left = 300, Top = 120, Width = 90, DialogResult = DialogResult.OK };
         var cancel = new Button { Text = "Cancel", Left = 400, Top = 120, Width = 86, DialogResult = DialogResult.Cancel };
         dlg.Controls.AddRange(new Control[] { lab, box, ok, cancel });

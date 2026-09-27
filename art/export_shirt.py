@@ -11,11 +11,14 @@ the glTF via Interchange so units and inverse-binds stay game-correct.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import bpy
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "art"))
+from mesh_source import source_path, load_source, protect_source
 
 
 def _env_path(name: str) -> Path | None:
@@ -34,7 +37,7 @@ def _first_existing(*paths: Path | str | None) -> Path | None:
 
 
 MESH_NAME = os.environ.get("ROWE_MESH", "tshirt-baggy-male")
-BLEND = _env_path("ROWE_BLEND") or (ROOT / "art" / "rig" / "main-rig_shirt.blend")
+SOURCE = source_path(ROOT / "art" / "rig" / "main-rig_shirt.blend")
 GLB = _first_existing(
     _env_path("ROWE_BIND_GLB"),
     ROOT / "art" / "_ref" / "cue-hoodie" / "RollerSkate" / "Content" / "MainFolder" / "Character" / "upper" / "hoodie" / "hoodie-male.glb",
@@ -93,13 +96,12 @@ def import_game_armature() -> bpy.types.Object:
 def main() -> None:
     if GLB is None or not GLB.exists():
         raise FileNotFoundError("Missing hoodie bind pose. Pull clothing first.")
-    if not Path(BLEND).exists():
-        raise FileNotFoundError(f"Missing {BLEND}")
-    bpy.ops.wm.open_mainfile(filepath=str(BLEND))
+    protect_source(SOURCE, OUT_GLB, _env_path("ROWE_GAMEBIND") or ROOT / "art" / f"{MESH_NAME}.gamebind.glb")
+    load_source(SOURCE)
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
-    print("BLEND_MESHES", [(o.name, len(o.data.vertices)) for o in meshes])
+    print("SOURCE_MESHES", [(o.name, len(o.data.vertices)) for o in meshes])
     if not meshes:
-        raise RuntimeError("This Blender file has no clothing mesh yet. Model it, then Export this mesh.")
+        raise RuntimeError("This source has no clothing mesh yet. Save your .blend or re-export your FBX first.")
     mesh_obj = next(
         (
             o
@@ -113,7 +115,9 @@ def main() -> None:
     if mesh_obj is None:
         mesh_obj = max(meshes, key=lambda o: len(o.data.vertices))
     print("EXPORT_MESH", mesh_obj.name, "verts", len(mesh_obj.data.vertices))
-    old_arm = bpy.data.objects.get("main-rig")
+    old_arm = mesh_obj.find_armature()
+    if old_arm is None or not any(v.groups for v in mesh_obj.data.vertices):
+        raise RuntimeError("Clothes need the game armature and vertex weights. Export both the garment and its rig.")
 
     for src, dst in FOREARM_MAP.items():
         n = copy_group(mesh_obj, src, dst)
@@ -135,7 +139,9 @@ def main() -> None:
     bpy.ops.object.select_all(action="DESELECT")
     mesh_obj.select_set(True)
     bpy.context.view_layer.objects.active = mesh_obj
+    world = mesh_obj.matrix_world.copy()
     mesh_obj.parent = None
+    mesh_obj.matrix_world = world
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
@@ -158,9 +164,12 @@ def main() -> None:
     arm.select_set(True)
     mesh_obj.select_set(True)
     bpy.context.view_layer.objects.active = arm
-    FBX.parent.mkdir(parents=True, exist_ok=True)
+    # An FBX is already the user's editable source; never overwrite it with a backup.
+    backup = FBX if FBX.resolve() != SOURCE.resolve() else FBX.with_name(FBX.stem + ".export.fbx")
+    protect_source(SOURCE, backup)
+    backup.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.export_scene.fbx(
-        filepath=str(FBX),
+        filepath=str(backup),
         use_selection=True,
         add_leaf_bones=False,
         bake_anim=False,
@@ -173,7 +182,8 @@ def main() -> None:
         use_armature_deform_only=False,
         mesh_smooth_type="FACE",
     )
-    print("WROTE", FBX)
+    print("WROTE", backup)
+    OUT_GLB.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.export_scene.gltf(
         filepath=str(OUT_GLB),
         use_selection=True,

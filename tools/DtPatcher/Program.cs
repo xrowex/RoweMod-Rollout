@@ -9,6 +9,10 @@ namespace DtPatcher;
 
 public static class Program
 {
+    public static bool IsLocallyDeleted(string repo, string row) =>
+        !string.IsNullOrWhiteSpace(row) && row == Path.GetFileName(row) && !row.Contains('/') && !row.Contains('\\')
+        && File.Exists(Path.Combine(repo, "dumps", "deleted-mods", row, "item.json"));
+
     public static int Main(string[] args) => Run(args);
 
     public static string DiscoverRepo(string? start = null)
@@ -140,6 +144,11 @@ public static class Program
             }
             var spec = Newtonsoft.Json.JsonConvert.DeserializeObject<ItemSpec>(File.ReadAllText(full)) ?? new ItemSpec();
             spec.Normalize();
+            if (IsLocallyDeleted(repo, spec.Row))
+            {
+                Out("SKIP deleted " + spec.Row);
+                continue;
+            }
             if (string.IsNullOrWhiteSpace(spec.Row) || string.IsNullOrWhiteSpace(spec.CloneRow))
             {
                 Out("item needs row + cloneRow: " + full);

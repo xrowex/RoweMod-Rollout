@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using DtPatcher;
 
 namespace RoweMod.Core;
@@ -80,7 +81,10 @@ public static class ModPackage
             Table = spec.Table,
         };
         File.WriteAllText(Path.Combine(destDir, "mod.json"), JsonSerializer.Serialize(info, Json), Utf8);
-        File.Copy(itemJson, Path.Combine(destDir, "item.json"), overwrite: true);
+        var sharedItem = JsonNode.Parse(File.ReadAllText(itemJson))!.AsObject();
+        sharedItem.Remove("sourceBlend"); // Author's local project path is not part of a shared mod.
+        sharedItem.Remove("sourceMesh");
+        File.WriteAllText(Path.Combine(destDir, "item.json"), sharedItem.ToJsonString(Json), Utf8);
 
         var preview = FindPreview(repo, spec);
         if (preview != null)
@@ -206,9 +210,13 @@ public static class ModPackage
             foreach (var file in Directory.GetFiles(srcDir))
             {
                 var baseName = Path.GetFileNameWithoutExtension(file);
-                if (!NameMatches(baseName, name)) continue;
-                if (baseName.EndsWith("_Skeleton", StringComparison.OrdinalIgnoreCase)) continue;
-                if (baseName.Contains("PhysicsAsset", StringComparison.OrdinalIgnoreCase)) continue;
+                // New skate meshes own a dedicated folder. Their imported rig,
+                // material and texture packages must travel with the mesh.
+                var skateFolder = parent.Replace('\\', '/').StartsWith("MainFolder/Character/skates/", StringComparison.OrdinalIgnoreCase)
+                    && Path.GetFileName(parent).Equals(name, StringComparison.OrdinalIgnoreCase);
+                if (!skateFolder && !NameMatches(baseName, name)) continue;
+                if (!skateFolder && baseName.EndsWith("_Skeleton", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!skateFolder && baseName.Contains("PhysicsAsset", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!IsCookedPackageFile(file)) continue;
                 var destName = Path.GetFileName(file);
                 if (!chosen.ContainsKey(destName))

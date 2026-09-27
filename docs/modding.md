@@ -69,7 +69,32 @@ Use this when you need a new silhouette.
 | `DT-frames` | `S-frames` | `BladeMesh` (static) |
 | `DT-wheels` | `S-wheels` | `WheelAlbedo` only — no mesh |
 
-Skates have their own button in RoweMod. Do not rig frames or boots to `main-rig`.
+New Boots projects include both standard inline frames and wheels as fitting guides.
+New Frames projects include the standard boots, aligned around the editable left
+frame's local origin. The game uses that single frame mesh for both feet.
+Boot templates import the corrected 87-bone game skeleton with a clean stick
+display, without the glTF joint-shape gizmos. Frame templates include this rig
+as a reference only; frame exports remain static meshes. Existing saved Blender
+projects retain their own rig until edited explicitly.
+Guides live in the locked **REFERENCE - not exported** collection; toggle its
+visibility in Blender's Outliner to check fit. They are excluded from RoweMod
+exports even if the collection is renamed. Existing saved projects are not
+modified. Both stock models must first be extracted from your own game.
+
+Skates have their own button in RoweMod. Frames are static. Boots use the game's
+87-bone `main-rig`; keep the extracted boot reference's bone names and hierarchy.
+The boot exporter converts the extracted reference rotations for Unreal and
+rebuilds inverse bind matrices. Do not manually flip the rig to compensate.
+
+Boot export ignores Blender's `glTF_not_exported` rig-helper collection and
+removes empty armature modifiers only from the temporary export scene. Your
+saved source is not changed. Imported boots have their own asset folder; the
+packer includes its skeleton, physics asset, material and texture dependencies.
+
+For diagnostics, export the original and cooked Skeleton assets as JSON using
+CUE4Parse and run `python tools/verify_boot_pose.py original.json cooked.json`.
+The comparison uses bone names and parents, treats quaternion q/-q as equal,
+and rejects reversed rotations, changed translations or changed scales.
 
 Upper fields that matter for a new row: `UpperMale`, `UpperFemale`, `Albedo`, `Normal`, `Roughness`, `BodyMask`, `HeadMask`, `PreviewImage`, `LocalizedName`, `Price`, `Colour`.
 

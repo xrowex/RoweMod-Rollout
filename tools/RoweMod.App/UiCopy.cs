@@ -16,7 +16,6 @@ static class UiCopy
         None,
         FindGame,
         BrowseUnreal,
-        OpenDotnet,
         Setup,
         Cook,
         Play,
@@ -30,8 +29,6 @@ static class UiCopy
     {
         if (t.GamePaks is null)
             return new("Find the game", "Scans Steam on every drive, or you pick the folder.", NextAction.FindGame, "Find game");
-        if (!t.HasDotnet)
-            return new("Install .NET 8", "SDK from Microsoft, then reopen RoweMod.", NextAction.OpenDotnet, "Open download");
         if (!t.HasRetoc)
             return new("Run Setup", "Copies the clothing menus once.", NextAction.Setup, "Run Setup");
         if (CookPending(t) && t.UnrealEditor is null)
@@ -53,7 +50,7 @@ static class UiCopy
         string current = next.Action switch
         {
             NextAction.FindGame => "game",
-            NextAction.Setup or NextAction.OpenDotnet => "setup",
+            NextAction.Setup => "setup",
             NextAction.BrowseUnreal => "cook",
             NextAction.Cook => "cook",
             NextAction.Play => cookNeeded ? "cook" : "play",
@@ -102,7 +99,7 @@ static class UiCopy
         return pulled ? "" : "Get from game first.";
     }
 
-    public static string GalleryBanner => "Subscribe, then Play.";
+    public static string GalleryBanner => "Subscribe and Play, or upload and update your own cooked mods.";
     public static string GalleryEmpty => "No mods in the catalog yet.";
 
     public static bool CookPending(DetectedTools t)

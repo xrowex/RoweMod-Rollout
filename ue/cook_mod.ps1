@@ -44,7 +44,7 @@ Write-Host "Cooking Windows..."
 if ($LASTEXITCODE -ne 0) { throw "Cook failed ($LASTEXITCODE)" }
 
 if (-not $SkipPack) {
-    dotnet run --project (Join-Path $tools "DtPatcher\DtPatcher.csproj") -c Release -- --all-items
+    & (Join-Path $tools "patch_items.ps1")
     if ($LASTEXITCODE -ne 0) { throw "DtPatcher failed ($LASTEXITCODE)" }
     & (Join-Path $tools "pack_mod.ps1")
 } else {

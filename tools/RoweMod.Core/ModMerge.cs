@@ -96,6 +96,7 @@ public static class ModMerge
         try { spec = ModPackage.ReadItem(itemJson); }
         catch { return; }
         if (spec.Sample) return;
+        if (DtPatcher.Program.IsLocallyDeleted(repo, spec.Row)) return;
         if (!seen.Add(spec.Row)) return;
         if (!ModPackage.CanPack(repo, spec, out var why))
         {

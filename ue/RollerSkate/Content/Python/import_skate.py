@@ -85,6 +85,10 @@ def main():
 
     mesh_path = mesh_dir + "/" + mesh_name
     delete_if_exists(mesh_path)
+    # Do not reuse the previous import's incorrect reference pose.
+    if kind == "skeletal-skate":
+        delete_if_exists(mesh_path + "_Skeleton")
+        delete_if_exists(mesh_path + "_PhysicsAsset")
     import_gltf(glb, mesh_dir)
 
     static_mesh = None
@@ -97,10 +101,9 @@ def main():
             skel_mesh = asset
 
     want_static = kind == "static"
-    mesh = static_mesh if want_static else (skel_mesh or static_mesh)
+    mesh = static_mesh if want_static else skel_mesh
     if mesh is None:
-        unreal.log_error("skate mesh import failed")
-        return
+        raise RuntimeError("Skate import failed: expected " + ("StaticMesh" if want_static else "SkeletalMesh"))
     if want_static and not isinstance(mesh, unreal.StaticMesh):
         unreal.log_error("frame cook needs a StaticMesh (BladeMesh). Got " + mesh.get_class().get_name())
         return

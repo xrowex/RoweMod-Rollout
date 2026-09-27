@@ -24,6 +24,8 @@ sealed class ExportWorkshopForm : Form
     readonly List<Panel> _modeCards = new();
     readonly Panel _playBar = new();
     readonly Button _playCta = new();
+    readonly Button _deleted = new();
+    bool _showDeleted;
     WorkshopTab? _tab;
 
     public bool ExportMesh { get; private set; }
@@ -156,6 +158,15 @@ sealed class ExportWorkshopForm : Form
 
         Controls.Add(_list);
         Controls.Add(_hint);
+        var manage = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(12, 2, 12, 2) };
+        manage.Controls.Add(SmallButton("Refresh saved files", Reload));
+        _deleted.Text = "Deleted mods";
+        _deleted.AutoSize = true;
+        _deleted.FlatStyle = FlatStyle.Flat;
+        _deleted.Padding = new Padding(8, 2, 8, 2);
+        _deleted.Click += (_, _) => { _showDeleted = !_showDeleted; RebuildList(); };
+        manage.Controls.Add(_deleted);
+        Controls.Add(manage);
         Controls.Add(pullBar);
         Controls.Add(pick);
         Controls.Add(domainPick);
@@ -164,6 +175,7 @@ sealed class ExportWorkshopForm : Form
 
         StyleDomains();
         SetTab(WorkshopTab.Paint);
+        Activated += (_, _) => Reload();
     }
 
     static void WireClicks(Control root, Action click)
@@ -206,6 +218,7 @@ sealed class ExportWorkshopForm : Form
 
     void SetDomain(WorkshopDomain domain)
     {
+        _showDeleted = false;
         _domain = domain;
         StyleDomains();
         _banner.Text = UiCopy.WorkshopBanner(_domain, _tab ?? WorkshopTab.Paint);
@@ -289,7 +302,7 @@ sealed class ExportWorkshopForm : Form
         _hint.Text = text;
         var on = !string.IsNullOrWhiteSpace(text);
         _hint.Visible = on;
-        _hint.Height = on ? 28 : 0;
+        _hint.Height = on ? 48 : 0;
     }
 
     void ShowPlayBar(bool on)
@@ -300,6 +313,7 @@ sealed class ExportWorkshopForm : Form
 
     void SetTab(WorkshopTab tab)
     {
+        _showDeleted = false;
         _tab = tab;
         StyleModes();
         _banner.Text = UiCopy.WorkshopBanner(_domain, tab);
@@ -309,7 +323,31 @@ sealed class ExportWorkshopForm : Form
     void RebuildList()
     {
         _list.SuspendLayout();
-        _list.Controls.Clear();
+        foreach (Control old in _list.Controls.Cast<Control>().ToArray())
+        {
+            foreach (var pic in old.Controls.OfType<PictureBox>()) pic.Image?.Dispose();
+            old.Dispose();
+        }
+        var deleted = LocalModTrash.List(_tools.Repo);
+        _deleted.Text = _showDeleted ? "Back to my mods" : "Deleted mods (" + deleted.Count + ")";
+        if (_showDeleted)
+        {
+            _list.Controls.Add(EmptyState("Source artwork is kept. Restore a mod, then Play to put it back in-game."));
+            foreach (var entry in deleted)
+            {
+                var row = new FlowLayoutPanel { AutoSize = true, Padding = new Padding(12), Margin = new Padding(0, 0, 0, 8) };
+                row.Controls.Add(new Label { Text = entry.Title, AutoSize = true, Margin = new Padding(0, 8, 20, 0) });
+                row.Controls.Add(SmallButton("Restore", () =>
+                {
+                    try { LocalModTrash.Restore(_tools.Repo, entry); Reload(); SetHint("Restored " + entry.Title + ". Play applies it to the game.", true); ShowPlayBar(true); }
+                    catch (Exception ex) { MessageBox.Show(this, ex.Message, "Restore mod"); }
+                }, true));
+                _list.Controls.Add(row);
+            }
+            SizeCards();
+            _list.ResumeLayout();
+            return;
+        }
         if (_tab == null) { _list.ResumeLayout(); return; }
 
         if (_tab == WorkshopTab.Mesh)
@@ -334,6 +372,12 @@ sealed class ExportWorkshopForm : Form
 
         SizeCards();
         _list.ResumeLayout();
+    }
+
+    void Reload()
+    {
+        _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
+        RebuildList();
     }
 
     IEnumerable<(string Title, List<ClothingPiece> Items)> Groups()
@@ -384,7 +428,9 @@ sealed class ExportWorkshopForm : Form
             Font = new Font("Segoe UI", 9.5f),
             ForeColor = Color.FromArgb(180, 210, 190),
             Margin = new Padding(0, 0, 0, 10),
-            Text = _domain == WorkshopDomain.Skates ? "Copies a pulled mesh." : "Opens the skeleton in Blender.",
+            Text = _domain == WorkshopDomain.Skates
+                ? "Create a Blender project from a frame or boot. Edit → Ctrl+S → Export + Play."
+                : "Create a Blender project with the rig. Model and weight your garment → Ctrl+S → Export + Play.",
         };
         var go = SmallButton("Create", StartNewMesh, primary: true);
         go.Margin = new Padding(0, 0, 0, 0);
@@ -396,6 +442,11 @@ sealed class ExportWorkshopForm : Form
 
     void StartNewMesh()
     {
+        if (_tools.Blender == null)
+        {
+            MessageBox.Show(this, "Install Blender first, then reopen Create.", "New mesh");
+            return;
+        }
         using var dlg = new NewMeshForm(_domain);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         if (string.IsNullOrWhiteSpace(dlg.GarmentName))
@@ -408,13 +459,11 @@ sealed class ExportWorkshopForm : Form
             var piece = _domain == WorkshopDomain.Skates
                 ? MeshWork.CreateSkate(_tools.Repo, dlg.GarmentName, dlg.Slot)
                 : MeshWork.CreateMesh(_tools.Repo, dlg.GarmentName, dlg.Slot);
-            var open = piece.Blend ?? piece.Model;
-            if (_tools.Blender != null && open != null)
-                ClothingLibrary.OpenInBlender(_tools.Blender, open);
+            OpenProject(piece);
             _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
             SetHint(_domain == WorkshopDomain.Skates
-                ? "Edit the copy, save the glb, then Play."
-                : "Model on the gray bones, then Export.", ok: true);
+                ? "Your project is saved in art/skates. Edit it in Blender, Ctrl+S, then Refresh saved files → Export + Play."
+                : "Your project is saved in art/rig. Model and weight the garment, Ctrl+S, then Export + Play.", ok: true);
             RebuildList();
         }
         catch (Exception ex)
@@ -436,7 +485,7 @@ sealed class ExportWorkshopForm : Form
     {
         var card = new Panel
         {
-            Height = 132,
+            Height = 174,
             Margin = new Padding(0, 0, 0, 8),
             BackColor = piece.Sample ? Color.FromArgb(38, 36, 32) : Color.FromArgb(32, 36, 42),
             Padding = new Padding(10),
@@ -454,7 +503,7 @@ sealed class ExportWorkshopForm : Form
                 SizeMode = PictureBoxSizeMode.Zoom,
                 BackColor = Color.FromArgb(18, 18, 20),
             };
-            try { pic.Image = Image.FromFile(piece.Preview); } catch { /* skip bad png */ }
+            try { using var source = Image.FromFile(piece.Preview); pic.Image = new Bitmap(source); } catch { /* skip bad png */ }
             card.Controls.Add(pic);
             x = 84;
         }
@@ -474,11 +523,20 @@ sealed class ExportWorkshopForm : Form
         card.Controls.Add(title);
         card.Controls.Add(sub);
 
+        if (!piece.FromGame && piece.ItemJson != null)
+        {
+            var source = _tab == WorkshopTab.Mesh && piece.Kind == ClothingKind.Mesh ? MeshWork.EditableSource(_tools.Repo, piece) : piece.PaintFile;
+            var path = new Label { Left = x, Top = 69, Height = 22, Width = 620, AutoEllipsis = true,
+                ForeColor = Color.FromArgb(150, 174, 180), Text = source == null ? "" : "Save file: " + Path.GetRelativePath(_tools.Repo, source) };
+            _tips.SetToolTip(path, source);
+            card.Controls.Add(path);
+        }
+
         var buttons = new FlowLayoutPanel
         {
             Left = x,
-            Top = 74,
-            Height = 48,
+            Top = 98,
+            Height = 68,
             Width = 700,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true,
@@ -494,51 +552,39 @@ sealed class ExportWorkshopForm : Form
     {
         if (_tab == WorkshopTab.Mesh && piece.Kind == ClothingKind.Mesh && !piece.FromGame && !piece.Sample)
         {
-            if (_domain == WorkshopDomain.Skates)
-            {
-                var play = SmallButton("Play", () => QueueSkateAndPlay(piece), primary: true);
-                play.Enabled = piece.Model != null && File.Exists(piece.Model);
-                if (!play.Enabled)
-                    _tips.SetToolTip(play, "Need the glb in art/skates.");
-                yield return play;
-            }
-            else
-            {
-                var bind = MeshWork.FindBindGlb(_tools.Repo);
-                var exp = SmallButton("Export + Play", () => BeginExport(piece, bind, launchPlay: true), primary: true);
-                exp.Enabled = piece.Blend != null && bind != null && _tools.Blender != null && !piece.IsEmptyRig;
-                if (!exp.Enabled)
-                {
-                    _tips.SetToolTip(exp, piece.IsEmptyRig
-                        ? "Add a clothing mesh in Blender first."
-                        : bind == null
-                            ? "Get from game first."
-                            : "Install Blender 5.1.");
-                }
-                yield return exp;
-            }
+            var bind = MeshWork.FindBindGlb(_tools.Repo);
+            var exp = SmallButton("Export + Play", () => BeginExport(piece, bind, launchPlay: true), primary: true);
+            exp.Enabled = _tools.Blender != null && File.Exists(MeshWork.EditableSource(_tools.Repo, piece));
+            _tips.SetToolTip(exp, exp.Enabled ? "Uses the saved file: Ctrl+S for .blend; re-export FBX after editing."
+                : "Open in Blender to create the project, then return here after saving.");
+            yield return exp;
+            yield return SmallButton("Choose mesh…", () => ChooseMeshSource(piece));
         }
 
         if (piece.Id.StartsWith("tex:", StringComparison.OrdinalIgnoreCase) && piece.PaintFile != null)
         {
             yield return SmallButton("Make a paint mod", () =>
             {
-                var made = TextureMods.Promote(_tools.Repo, piece);
-                if (made == null)
+                try
                 {
-                    MessageBox.Show(this, "Could not tell which catalog item this texture belongs to.", "RoweMod",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
+                    var made = TextureMods.Promote(_tools.Repo, piece);
+                    if (made == null)
+                    {
+                        MessageBox.Show(this, "Could not tell which catalog item this texture belongs to.", "RoweMod",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+                    ClothingLibrary.OpenFile(made.Value.Png);
+                    _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
+                    SetHint("Edit the PNG, then Play.", ok: true);
+                    ShowPlayBar(true);
+                    RebuildList();
                 }
-                ClothingLibrary.OpenFile(made.Value.Png);
-                _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
-                SetHint("Edit the PNG, then Play.", ok: true);
-                ShowPlayBar(true);
-                RebuildList();
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "Paint mod", MessageBoxButtons.OK, MessageBoxIcon.Information); }
             }, primary: true);
         }
 
-        if (piece.PaintFile != null && File.Exists(piece.PaintFile) && piece.ItemJson != null && !piece.FromGame)
+        if (_tab == WorkshopTab.Paint && piece.PaintFile != null && File.Exists(piece.PaintFile) && piece.ItemJson != null && !piece.FromGame)
         {
             yield return SmallButton("Edit PNG", () => ClothingLibrary.OpenFile(piece.PaintFile), primary: _tab == WorkshopTab.Paint);
             yield return SmallButton("Play", () =>
@@ -561,59 +607,75 @@ sealed class ExportWorkshopForm : Form
                 }
                 try
                 {
-                    ClothingLibrary.OpenInBlender(_tools.Blender, blenderFile);
+                    if (piece.FromGame) ClothingLibrary.OpenInBlender(_tools.Blender, blenderFile);
+                    else OpenProject(piece);
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show(this, ex.Message, "Blender", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
-            });
+            }, primary: !piece.FromGame && !File.Exists(MeshWork.EditableSource(_tools.Repo, piece)));
             open.Enabled = _tools.Blender != null;
             yield return open;
         }
 
-        if (!piece.Sample && piece.ItemJson != null && piece.Kind == ClothingKind.Texture && !piece.FromGame)
+        if (!piece.Sample && piece.ItemJson != null && !piece.FromGame)
         {
-            yield return SmallButton("Remove from game", () =>
+            yield return SmallButton("Show files", () =>
             {
-                MeshWork.SetSample(piece.ItemJson, true);
-                _pieces = ClothingLibrary.Scan(_tools.Repo).ToList();
-                RebuildList();
+                var file = _tab == WorkshopTab.Mesh && piece.Kind == ClothingKind.Mesh ? MeshWork.EditableSource(_tools.Repo, piece) : piece.PaintFile;
+                ClothingLibrary.OpenFolder(file != null && File.Exists(file) ? file : piece.Model ?? piece.ItemJson);
             });
+            yield return SmallButton("Delete…", () => DeleteMod(piece));
         }
     }
 
-    void QueueSkateAndPlay(ClothingPiece piece)
+    void OpenProject(ClothingPiece piece)
     {
-        if (piece.Model == null || !File.Exists(piece.Model))
+        if (_tools.Blender == null) throw new InvalidOperationException("Install Blender, then reopen Create.");
+        var blend = MeshWork.EditableSource(_tools.Repo, piece);
+        if (File.Exists(blend)) ClothingLibrary.OpenInBlender(_tools.Blender, blend);
+        else if (piece.Blend == null && piece.Model != null && ClothingLibrary.IsSkate(piece))
         {
-            MessageBox.Show(this, "Missing the glb in art/skates. Get from game, then create the part again.", "RoweMod",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
+            var frames = piece.Slot.Equals("Frames", StringComparison.OrdinalIgnoreCase);
+            var reference = MeshWork.FindSkateRef(_tools.Repo, frames ? "Boots" : "Frames")
+                ?? throw new InvalidOperationException("Get skate models from the game first so both boots and frames are available for reference.");
+            ClothingLibrary.OpenInBlender(_tools.Blender, piece.Model, blend, reference, frames ? "frames" : "boots");
         }
-        MeshWork.SaveTarget(_tools.Repo, MeshWork.FromPiece(_tools.Repo, piece));
-        SavedCookTarget = true;
-        LaunchPlay = true;
-        DialogResult = DialogResult.OK;
-        Close();
+        else throw new InvalidOperationException("Choose your saved .blend or .fbx file first.");
+    }
+
+    void ChooseMeshSource(ClothingPiece piece)
+    {
+        using var picker = new OpenFileDialog { Title = "Choose the .blend or FBX saved for " + piece.Title,
+            Filter = "Mesh source (.blend, .fbx)|*.blend;*.fbx|Blender project|*.blend|FBX mesh|*.fbx", CheckFileExists = true };
+        if (picker.ShowDialog(this) != DialogResult.OK) return;
+        try { MeshWork.UseMeshSource(piece, picker.FileName); Reload(); SetHint(Path.GetExtension(picker.FileName).Equals(".fbx", StringComparison.OrdinalIgnoreCase)
+            ? "FBX linked. Re-export this FBX after editing, then Export + Play."
+            : "Blender project linked. Ctrl+S saves edits, then Export + Play.", true); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Choose project"); }
+    }
+
+    void DeleteMod(ClothingPiece piece)
+    {
+        if (MessageBox.Show(this, "Delete " + piece.Title + " from your local mods?\n\n"
+            + "Your mesh files and textures are kept. Restore it from Deleted mods anytime.\n"
+            + "Play removes it from the game, including a subscribed copy. The online gallery is unchanged.",
+            "Delete local mod", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+        try { LocalModTrash.Delete(_tools.Repo, piece); Reload(); SetHint("Deleted " + piece.Title + ". Play applies the removal; Deleted mods lets you restore it.", true); ShowPlayBar(true); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Delete mod"); }
     }
 
     void BeginExport(ClothingPiece piece, string? bind, bool launchPlay)
     {
-        if (piece.IsEmptyRig)
+        piece = ClothingLibrary.Scan(_tools.Repo).FirstOrDefault(p => p.ItemJson == piece.ItemJson) ?? piece;
+        if (!File.Exists(MeshWork.EditableSource(_tools.Repo, piece)))
         {
-            MessageBox.Show(this,
-                "This Blender file is still only the skeleton. Add a clothing mesh, weight-paint it, save, then Export.",
-                "RoweMod", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-        if (piece.Blend == null)
-        {
-            MessageBox.Show(this, "This item has no Blender file yet. Use Create.", "RoweMod",
+            MessageBox.Show(this, "Choose your saved .blend or .fbx with Choose mesh… first.", "RoweMod",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        if (bind == null)
+        if (bind == null && !ClothingLibrary.IsSkate(piece))
         {
             MessageBox.Show(this, "Get from game first. Export needs the hoodie bind pose.", "RoweMod",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -630,8 +692,20 @@ sealed class ExportWorkshopForm : Form
 
     string HelpText(ClothingPiece piece)
     {
-        if (piece.IsEmptyRig)
-            return "Skeleton only.";
+        if (!piece.FromGame && _tab == WorkshopTab.Paint)
+            return "Edit the PNG and save it, then Play. Use Shape for changes to the mesh.";
+        if (!piece.FromGame && piece.Kind == ClothingKind.Mesh)
+        {
+            if (!File.Exists(MeshWork.EditableSource(_tools.Repo, piece)))
+                return "Choose mesh… links a saved .blend or FBX. Open in Blender starts a new saved project.";
+            if (string.Equals(Path.GetExtension(piece.Blend), ".fbx", StringComparison.OrdinalIgnoreCase))
+                return (piece.Slot == "Frames" ? "" : "Include the game rig and weights. ")
+                    + "Re-export this FBX after edits → Export + Play. Ctrl+S in Blender does not update an FBX.";
+            return ClothingLibrary.IsSkate(piece)
+                ? (piece.Slot == "Boots" ? "Keep the boot rig and weights. " : "Edit your frame in Blender. ") + "Ctrl+S → Export + Play."
+                : "Model and weight your garment in Blender. Ctrl+S → Export + Play.";
+        }
+        if (!piece.FromGame) return "Save the edited PNG, then Play. Delete removes this local mod on the next Play.";
         return piece.Garment ?? piece.Slot;
     }
 
@@ -692,11 +766,15 @@ sealed class ExportWorkshopForm : Form
             {
                 var left = buttons.Left;
                 buttons.Width = Math.Max(200, w - left - 16);
+                buttons.Height = buttons.GetPreferredSize(new Size(buttons.Width, 0)).Height;
+                c.Height = buttons.Top + buttons.Height + 12;
             }
             foreach (Control inner in c.Controls)
             {
                 if (inner is Label lab && !lab.AutoSize && lab.Font.Size < 12f)
                     lab.Width = Math.Max(180, w - lab.Left - 16);
+                else if (inner is Label wrap && wrap.AutoSize && wrap.Font.Size < 12f)
+                    wrap.MaximumSize = new Size(Math.Max(180, w - 32), 0);
             }
         }
     }

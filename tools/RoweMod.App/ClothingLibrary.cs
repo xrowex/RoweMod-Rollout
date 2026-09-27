@@ -18,7 +18,7 @@ sealed class ClothingPiece
     public required ClothingKind Kind { get; init; }
     public string? BasedOn { get; init; }
     public string? ItemJson { get; init; }
-    public string? Blend { get; init; }
+    public string? Blend { get; init; } // Editable .blend or .fbx; legacy property name.
     public string? Model { get; init; }
     public string? Folder { get; init; }
     public string? TexturesDir { get; init; }
@@ -36,8 +36,6 @@ sealed class ClothingPiece
     public string OpenFile => Blend ?? Model ?? ItemJson ?? Folder ?? "";
     public bool FromGame => Id.StartsWith("game:", StringComparison.OrdinalIgnoreCase)
         || Id.StartsWith("tex:", StringComparison.OrdinalIgnoreCase);
-    public bool HasModeledMesh => Kind == ClothingKind.Mesh && Model != null;
-    public bool IsEmptyRig => Kind == ClothingKind.Mesh && !FromGame && Blend != null && Model == null;
 }
 
 static class ClothingLibrary
@@ -99,7 +97,8 @@ static class ClothingLibrary
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     }
 
-    public static void OpenInBlender(string blender, string file)
+    public static void OpenInBlender(string blender, string file, string? saveBlend = null,
+        string? reference = null, string? skateKind = null)
     {
         if (!File.Exists(blender) || !File.Exists(file)) return;
         var ext = Path.GetExtension(file);
@@ -114,6 +113,9 @@ static class ClothingLibrary
             if (!File.Exists(script))
                 throw new InvalidOperationException("Missing art/open_model.py.");
             args = "--python \"" + script + "\" -- \"" + file + "\"";
+            if (saveBlend != null) args += " --save-blend \"" + saveBlend + "\"";
+            if (reference != null && skateKind != null)
+                args += " --reference \"" + reference + "\" --skate-kind \"" + skateKind + "\"";
         }
         Process.Start(new ProcessStartInfo
         {
@@ -155,13 +157,16 @@ static class ClothingLibrary
                 continue;
             }
             if (spec == null || string.IsNullOrWhiteSpace(spec.Row)) continue;
+            if (DtPatcher.Program.IsLocallyDeleted(repo, spec.Row)) continue;
 
             var row = spec.Row;
             var stem = row.EndsWith("-mod", StringComparison.OrdinalIgnoreCase) ? row[..^4] : row;
             var meshAsset = spec.UpperMale ?? spec.LowerMale ?? MeshRef(spec.Refs);
             var meshFile = string.IsNullOrWhiteSpace(meshAsset) ? null : meshAsset.Split('/').Last();
             var newMesh = !string.IsNullOrWhiteSpace(meshAsset);
-            string? blend = FirstExisting(
+            // Keep a missing explicit source visible instead of exporting a different fallback.
+            string? blend = spec.SourceMesh ?? spec.SourceBlend ?? FirstExisting(
+                Path.Combine(repo, "art", "skates", row + ".blend"),
                 Path.Combine(repo, "art", "rig", row + ".blend"),
                 Path.Combine(repo, "art", "rig", stem + ".blend"),
                 row.Contains("tshirt", StringComparison.OrdinalIgnoreCase)
@@ -209,10 +214,11 @@ static class ClothingLibrary
                 TexturesDir = textures,
                 Preview = preview,
                 Table = spec.Table,
-                PaintFile = TextureMods.FindAlbedoPng(repo, row, spec.Albedo ?? ""),
+                PaintFile = TextureMods.FindAlbedoPng(repo, row, spec.Albedo
+                    ?? (spec.Refs != null && spec.Refs.TryGetValue("WheelAlbedo", out var wheel) ? wheel : "")),
                 MeshAsset = meshAsset,
                 Sample = spec.Sample,
-                CanExport = newMesh && !spec.Sample && blend != null,
+                CanExport = newMesh && !spec.Sample && File.Exists(blend),
             });
         }
     }
@@ -410,6 +416,8 @@ static class ClothingLibrary
         public string? LowerMale { get; set; }
         public Dictionary<string, string>? Refs { get; set; }
         public string? Albedo { get; set; }
+        public string? SourceBlend { get; set; }
+        public string? SourceMesh { get; set; }
         public bool Sample { get; set; }
     }
 

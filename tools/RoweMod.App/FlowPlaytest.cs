@@ -24,7 +24,7 @@ static class FlowPlaytest
             var next = UiCopy.NextStep(t);
             log.AppendLine("NEXT  " + next.Title + " — " + next.Body);
             log.AppendLine("GAME  " + (t.GamePaks ?? "(none)"));
-            log.AppendLine("RET   " + t.HasRetoc + "  NET " + t.HasDotnet + "  UE " + (t.UnrealEditor != null));
+            log.AppendLine("RET   " + t.HasRetoc + "  UE " + (t.UnrealEditor != null));
             log.AppendLine("COOK  pending=" + UiCopy.CookPending(t) + "  overlay=" + (t.OverlayUtoc != null));
 
             if (UiCopy.ButtonHover("meshrun", t) != null)
@@ -123,6 +123,8 @@ static class FlowPlaytest
                 create.ShowTab(WorkshopTab.Mesh);
                 Application.DoEvents();
                 Shot(create, Path.Combine(shotDir, "04-create-skates-shape.png"));
+                create.Size = new Size(760, 560);
+                Shot(create, Path.Combine(shotDir, "04-create-narrow.png"));
                 create.Hide();
             }
 
@@ -146,10 +148,19 @@ static class FlowPlaytest
             {
                 neu.CreateControl();
                 skateNew.CreateControl();
+                neu.StartPosition = skateNew.StartPosition = FormStartPosition.Manual;
+                neu.Location = skateNew.Location = new Point(-2000, -2000);
+                neu.Show();
+                Shot(neu, Path.Combine(shotDir, "06-new-garment.png"));
+                neu.Hide();
+                skateNew.Show();
+                Shot(skateNew, Path.Combine(shotDir, "06-new-skate.png"));
+                skateNew.Hide();
                 Ok("new mesh dialogs");
             }
 
             TestPaintPromote(t.Repo, Ok, Fail);
+            WorkshopChecks.Run(t.Repo, Ok);
 
             log.AppendLine("PATCH …");
             var patch = DtPatcher.Program.PatchAllItems(t.Repo, Array.Empty<string>(), line => log.AppendLine("  " + line));
@@ -246,6 +257,12 @@ static class FlowPlaytest
                 fail("probe normal px=(" + c.R + "," + c.G + "," + c.B + ")");
             else
                 ok("paint normal is flat DirectX");
+            var originalJson = File.ReadAllText(json);
+            var again = TextureMods.Promote(repo, piece);
+            if (again == null || File.ReadAllText(json) != originalJson)
+                fail("reopening a paint mod changed its definition");
+            else
+                ok("reopening a paint mod preserves its existing definition and artwork");
         }
         finally
         {

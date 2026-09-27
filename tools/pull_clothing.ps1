@@ -20,9 +20,15 @@ Write-Host "Pull clothing from $game"
 Write-Host "Local only -> $OutDir  (gitignored, do not upload)"
 
 $proj = Join-Path $tools "RolloutExtractor\RolloutExtractor.csproj"
-$exe = Join-Path $tools "RolloutExtractor\bin\Release\net8.0\RolloutExtractor.exe"
-dotnet build $proj -c Release
-if ($LASTEXITCODE -ne 0) { throw "RolloutExtractor build failed" }
+$exe = Join-Path $repo "dist\extractor\RolloutExtractor.exe"
+if (-not (Test-Path $exe)) {
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+        throw "The extractor is missing. Extract the complete RoweMod-Windows-x64.zip and try again."
+    }
+    $exe = Join-Path $tools "RolloutExtractor\bin\Release\net8.0\RolloutExtractor.exe"
+    dotnet build $proj -c Release
+    if ($LASTEXITCODE -ne 0) { throw "Developer extractor build failed. Use the ready-to-run release ZIP instead." }
+}
 
 $usmap = Join-Path $repo "dumps\mappings.usmap"
 $invoke = @("--game", $game, "--out", $OutDir)

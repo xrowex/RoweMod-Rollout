@@ -15,6 +15,7 @@ static class TextureMods
 
     public static bool IsPaintTarget(ClothingPiece piece)
     {
+        if (!piece.FromGame && !piece.Sample && piece.ItemJson != null && piece.PaintFile != null) return true;
         if (piece.Kind != ClothingKind.Texture) return false;
         if (piece.Sample) return false;
         if (piece.Slot is "Body" or "Skin" or "Eyes") return false;
@@ -55,6 +56,17 @@ static class TextureMods
             ? cloneRow
             : cloneRow + "-mod");
         var slotDir = SlotFolder(table);
+        if (DtPatcher.Program.IsLocallyDeleted(repo, row))
+            throw new InvalidOperationException("This mod is in Deleted mods. Restore it there before editing it again.");
+        var existingJson = existing?.JsonPath ?? Path.Combine(repo, "items", slotDir, row + ".json");
+        if (File.Exists(existingJson))
+        {
+            var saved = JsonSerializer.Deserialize<ItemFile>(File.ReadAllText(existingJson), JsonRead)!;
+            var existingPng = TexturePaths(saved).Select(path => FindAlbedoPng(repo, saved.Row, path))
+                .FirstOrDefault(path => path != null && LooksLikeAlbedo(Path.GetFileName(path)));
+            if (existingPng == null) throw new InvalidOperationException("This mod already exists. Open it under Yours; its files were not replaced.");
+            return new PaintModResult(saved.Row!, saved.LocalizedName ?? Human(row), existingJson, existingPng, Path.GetDirectoryName(existingPng)!);
+        }
         var texDir = Path.Combine(repo, "art", "textures", row);
         Directory.CreateDirectory(texDir);
         var destPng = Path.Combine(texDir, "T_" + row + "-albedo.png");
@@ -135,7 +147,9 @@ static class TextureMods
                 return file;
             if (LooksLikeAlbedo(name) &&
                 !string.IsNullOrWhiteSpace(row) &&
-                Path.GetFileName(Path.GetDirectoryName(file))!.Equals(row, StringComparison.OrdinalIgnoreCase) &&
+                (Path.GetFileName(Path.GetDirectoryName(file))!.Equals(row, StringComparison.OrdinalIgnoreCase)
+                 || (row.EndsWith("-mod", StringComparison.OrdinalIgnoreCase)
+                     && Path.GetFileName(Path.GetDirectoryName(file))!.Equals(row[..^4], StringComparison.OrdinalIgnoreCase))) &&
                 stem.Contains("albedo", StringComparison.OrdinalIgnoreCase))
                 hits.Add(file);
         }

@@ -26,6 +26,21 @@ static class MeshWork
 
     public static string TargetPath(string repo) => Path.Combine(repo, "dumps", "cook-target.json");
 
+    public static string EditableSource(string repo, ClothingPiece piece) => piece.Blend
+        ?? Path.Combine(repo, "art", ClothingLibrary.IsSkate(piece) ? "skates" : "rig", piece.Id + ".blend");
+
+    public static void UseMeshSource(ClothingPiece piece, string file)
+    {
+        if (piece.FromGame || piece.ItemJson == null || !File.Exists(file)
+            || !(Path.GetExtension(file).Equals(".blend", StringComparison.OrdinalIgnoreCase)
+                || Path.GetExtension(file).Equals(".fbx", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Choose a saved .blend or .fbx file for your mod.");
+        var node = JsonNode.Parse(File.ReadAllText(piece.ItemJson))!.AsObject();
+        node.Remove("sourceBlend");
+        node["sourceMesh"] = Path.GetFullPath(file);
+        File.WriteAllText(piece.ItemJson, node.ToJsonString(Json));
+    }
+
     public static string? FindBindGlb(string repo)
     {
         foreach (var path in new[]
@@ -45,14 +60,14 @@ static class MeshWork
         var meshDir = MeshGameDir(piece);
         var skate = ClothingLibrary.IsSkate(piece);
         var glb = skate
-            ? (piece.Model ?? Path.Combine(repo, "art", "skates", piece.Id + ".glb"))
+            ? Path.Combine(repo, "art", "skates", piece.Id + ".glb")
             : Path.Combine(repo, "art", meshName + ".glb");
         var bind = skate ? (FindSkateRef(repo, piece.Slot) ?? "") : (FindBindGlb(repo) ?? "");
         return new CookTarget
         {
             MeshName = meshName,
             MeshDir = meshDir,
-            Blend = piece.Blend ?? "",
+            Blend = EditableSource(repo, piece),
             Glb = glb,
             Gamebind = skate ? glb : Path.Combine(repo, "art", meshName + ".gamebind.glb"),
             BindGlb = bind,
@@ -113,8 +128,9 @@ static class MeshWork
             ["ROWE_OUT_GLB"] = target.Glb,
             ["ROWE_OUT_FBX"] = Path.ChangeExtension(target.Glb, ".fbx"),
             ["ROWE_GAMEBIND"] = target.Gamebind,
+            ["ROWE_IMPORT_KIND"] = target.ImportKind,
         };
-        if (!string.IsNullOrWhiteSpace(target.Blend)) env["ROWE_BLEND"] = target.Blend;
+        if (!string.IsNullOrWhiteSpace(target.Blend)) env["ROWE_SOURCE"] = target.Blend;
         if (!string.IsNullOrWhiteSpace(target.BindGlb)) env["ROWE_BIND_GLB"] = target.BindGlb;
         return env;
     }
@@ -140,6 +156,8 @@ static class MeshWork
         Directory.CreateDirectory(Path.GetDirectoryName(jsonPath)!);
         if (File.Exists(jsonPath))
             throw new InvalidOperationException("Item already exists: " + row);
+        if (DtPatcher.Program.IsLocallyDeleted(repo, row))
+            throw new InvalidOperationException("This name is in Deleted mods. Restore it or choose a new name.");
 
         var pulled = FindSkateRef(repo, slot)
             ?? throw new InvalidOperationException("Get skate models from my game first, then create a part.");
@@ -182,7 +200,7 @@ static class MeshWork
         if (!Directory.Exists(root)) return null;
         var frames = slot.Equals("Frames", StringComparison.OrdinalIgnoreCase);
         var prefer = frames
-            ? new[] { "standard-flat-frame", "flat-frame", "/skates/frames/" }
+            ? new[] { "standard-4x-wheel", "standard-flat-frame", "/skates/frames/" }
             : new[] { "standard-boots", "standard-boot", "/skates/boots/" };
         string? fallback = null;
         foreach (var file in Directory.GetFiles(root, "*.glb", SearchOption.AllDirectories))
@@ -216,6 +234,8 @@ static class MeshWork
         Directory.CreateDirectory(Path.GetDirectoryName(jsonPath)!);
         if (File.Exists(jsonPath))
             throw new InvalidOperationException("Item already exists: " + row);
+        if (DtPatcher.Program.IsLocallyDeleted(repo, row))
+            throw new InvalidOperationException("This name is in Deleted mods. Restore it or choose a new name.");
 
         var kit = Path.Combine(repo, "art", "rig", "main-rig.blend");
         if (!File.Exists(kit))
